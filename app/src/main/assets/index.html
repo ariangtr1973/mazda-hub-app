@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mazda Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@200;300;400;600&display=swap">
+<style>
+  /* Layout: landscape tablet (about 1280x800). Abstract hex-and-glow backdrop, frosted glass panels with a
+     diagonal sheen. Top row: swipe pane (directions / weather) and a time panel. Bottom: a wide media panel
+     with album art, a waveform scrubber and controls. Two skins: blue (Theme One) and purple (C1). */
+  :root {
+    --h: 205;
+    --bg: #02040a;
+    --accent: hsl(var(--h) 100% 64%);
+    --accent-glow: hsl(var(--h) 100% 56%);
+    --accent-dim: hsl(var(--h) 100% 60% / 0.34);
+    --accent-faint: hsl(var(--h) 100% 60% / 0.12);
+    --ink: #ffffff;
+    --ink-soft: rgba(235, 242, 250, 0.82);
+    --ink-dim: rgba(200, 215, 230, 0.58);
+    --glass: rgba(12, 16, 24, 0.46);
+    --glass-edge: rgba(255, 255, 255, 0.17);
+    --bad: #ff6b78;
+    --warn: #ffb547;
+    --font-ui: 'Exo 2', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; width: 100%; overflow: hidden; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); position: relative; overflow-x: hidden; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Backdrop */
+  .bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: linear-gradient(180deg, #02040a 0%, #050913 100%); }
+  .bg video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .bg-glow { position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 52% 42% at 50% 74%, hsl(var(--h) 100% 55% / 0.62), transparent 72%),
+      radial-gradient(ellipse 40% 36% at 14% 18%, hsl(calc(var(--h) + 38) 90% 50% / 0.26), transparent 70%),
+      radial-gradient(ellipse 36% 34% at 88% 24%, hsl(calc(var(--h) - 20) 95% 52% / 0.22), transparent 70%); }
+  .bg-hex { position: absolute; inset: 0; opacity: 0.9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.085'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.99-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.99 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    background-size: 56px 98px;
+    -webkit-mask-image: radial-gradient(ellipse 70% 62% at 50% 72%, #000 0%, rgba(0,0,0,0.25) 70%, transparent 100%);
+    mask-image: radial-gradient(ellipse 70% 62% at 50% 72%, #000 0%, rgba(0,0,0,0.25) 70%, transparent 100%); }
+  .bg-beam { position: absolute; left: -20%; width: 140%; height: 22%; transform: rotate(-16deg);
+    background: linear-gradient(90deg, transparent, hsl(var(--h) 100% 65% / 0.10), transparent); animation: beam 16s ease-in-out infinite alternate; }
+  .bg-beam.b1 { top: 22%; }
+  .bg-beam.b2 { top: 56%; animation-duration: 22s; animation-direction: alternate-reverse; }
+  @keyframes beam { from { transform: rotate(-16deg) translateX(-6%); } to { transform: rotate(-16deg) translateX(6%); } }
+  .bg-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(2,4,10,0.55) 0%, rgba(2,4,10,0) 30%, rgba(2,4,10,0.35) 100%); }
+
+  .hub { position: absolute; left: 50%; top: 50%; z-index: 1; width: 1280px; height: 800px; transform-origin: center center;
+    transform: translate(-50%, -50%) scale(var(--fit, 1)); container-type: inline-size;
+    display: grid; grid-template-columns: 1.6fr 1fr; grid-template-rows: minmax(0, 1fr) auto;
+    gap: 14px; padding: 16px 20px; }
+
+  /* Glass */
+  .glass { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: 18px;
+    background: var(--glass); border: 1px solid var(--glass-edge);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2); backdrop-filter: blur(12px) saturate(1.2);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), inset 0 0 30px rgba(255,255,255,0.025), 0 12px 40px rgba(0,0,0,0.45); }
+  .glass::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
+    background: linear-gradient(112deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.05) 33%, rgba(255,255,255,0) 33.3%); }
+  .glass > * { position: relative; z-index: 1; }
+  .label { font-size: 1.05rem; font-weight: 300; color: var(--ink-soft); letter-spacing: 0.04em; }
+
+  /* Swipe pane */
+  .swipe { display: flex; flex-direction: column; touch-action: none; }
+  .tabs { display: flex; gap: 6px; padding: 14px 18px 0; align-items: center; }
+  .tab { padding: 10px 18px; min-height: 44px; border-radius: 999px; border: 1px solid transparent; font-size: 1rem; font-weight: 300; letter-spacing: 0.06em; color: var(--ink-dim); }
+  .tab[aria-selected="true"] { border-color: var(--accent-dim); color: var(--ink); background: var(--accent-faint); }
+  .tabs .hint { margin-left: auto; font-size: 0.72rem; letter-spacing: 0.2em; color: var(--ink-dim); text-transform: uppercase; }
+  .viewport { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; margin-top: 8px; }
+  .stack { height: 100%; transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1); }
+  .pane { height: 100%; padding: 8px 18px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .dots { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 2; }
+  .dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.25); transition: background 0.2s, box-shadow 0.2s; }
+  .dots span.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+  .turn { display: flex; align-items: center; gap: 18px; padding: 12px 18px; border-radius: 14px; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.05); }
+  .turn svg { width: 50px; height: 50px; flex: none; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 6px var(--accent-glow)); }
+  .turn-dist { font-size: clamp(1.8rem, 3cqw, 2.8rem); font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1.05; }
+  .turn-road { font-size: clamp(0.8rem, 1.2cqw, 1.05rem); font-weight: 300; color: var(--ink-soft); letter-spacing: 0.08em; }
+  .route { flex: 1 1 0; min-height: 70px; border-radius: 14px; border: 1px solid var(--glass-edge); background: rgba(0,0,0,0.28); overflow: hidden; }
+  .route svg { width: 100%; height: 100%; display: block; }
+  .route .grid { stroke: rgba(255,255,255,0.10); stroke-width: 1; fill: none; }
+  .route .line { stroke: var(--accent); stroke-width: 3; fill: none; stroke-linecap: round; stroke-dasharray: 7 5; filter: drop-shadow(0 0 4px var(--accent-glow)); }
+  .route .dot { fill: var(--accent); }
+  .eta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.04); }
+  .stat b { display: block; font-size: clamp(1.1rem, 1.7cqw, 1.5rem); font-weight: 300; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 0.68rem; letter-spacing: 0.2em; color: var(--ink-dim); text-transform: uppercase; }
+  .wx-now { display: flex; align-items: center; gap: 20px; flex: 1 1 0; min-height: 0; }
+  .wx-now svg { width: clamp(60px, 8cqw, 100px); height: clamp(60px, 8cqw, 100px); stroke: var(--accent); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 8px var(--accent-glow)); flex: none; }
+  .wx-temp { font-size: clamp(3rem, 6cqw, 5.4rem); font-weight: 200; line-height: 1; font-variant-numeric: tabular-nums; }
+  .wx-cond { font-size: clamp(0.8rem, 1.2cqw, 1.05rem); font-weight: 300; color: var(--accent); letter-spacing: 0.14em; text-transform: uppercase; }
+  .wx-hours { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .wx-hours .stat { text-align: center; padding-inline: 4px; }
+  .sample { font-size: 0.68rem; letter-spacing: 0.2em; color: var(--warn); text-transform: uppercase; }
+
+  /* Time panel */
+  .timep { display: flex; flex-direction: column; padding: 16px 20px; }
+  .time-wrap { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 0; }
+  .time-big { font-size: clamp(3.6rem, 7.6cqw, 6.8rem); font-weight: 200; line-height: 1; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; text-shadow: 0 0 24px hsl(var(--h) 100% 60% / 0.35); }
+  .time-ampm { font-size: 0.26em; font-weight: 300; color: var(--accent); letter-spacing: 0.16em; margin-left: 0.4em; }
+  .time-date { font-size: clamp(1rem, 1.8cqw, 1.5rem); font-weight: 300; color: var(--ink-soft); letter-spacing: 0.08em; }
+  .foot { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--glass-edge);
+    background: rgba(255,255,255,0.05); font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); }
+  .chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .chip.mock i { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  button.chip:active { background: var(--accent-faint); border-color: var(--accent); }
+
+  /* Media panel */
+  .media { grid-column: 1 / -1; height: 252px; }
+  .wavewrap { position: absolute !important; left: 20px; right: 20px; top: 14px; height: 88px; touch-action: none; cursor: pointer; }
+  .wavewrap canvas { width: 100%; height: 100%; display: block; }
+  .mrow { position: absolute !important; left: 20px; right: 20px; bottom: 16px; display: flex; align-items: center; gap: 20px; }
+  .art { flex: none; width: 112px; height: 112px; border-radius: 16px; background-size: cover; background-position: center;
+    border: 1px solid rgba(255,255,255,0.3); overflow: hidden; position: relative; transform: scale(var(--pulse, 1));
+    box-shadow: 0 6px 22px rgba(0,0,0,0.55), 0 0 28px var(--glow, rgba(0,195,255,0.4)); }
+  .art::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 4px); }
+  .np-meta { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .np-src { font-size: 0.72rem; letter-spacing: 0.26em; text-transform: uppercase; color: var(--accent); }
+  .np-title { font-size: clamp(1.2rem, 2.1cqw, 1.9rem); font-weight: 400; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np-artist { font-size: clamp(0.85rem, 1.25cqw, 1.1rem); font-weight: 300; color: var(--ink-soft); letter-spacing: 0.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .times { font-size: 0.74rem; color: var(--ink-dim); letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
+  .controls { display: flex; align-items: center; gap: 12px; flex: none; }
+  .cbtn { width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.06);
+    display: flex; align-items: center; justify-content: center; transition: transform 0.1s, background 0.15s, border-color 0.15s; }
+  .cbtn.big { width: 78px; height: 78px; border-color: var(--accent); background: var(--accent-faint); box-shadow: 0 0 18px var(--accent-dim); }
+  .cbtn:active, .mix:active { transform: scale(0.93); background: var(--accent-dim); border-color: var(--accent); }
+  .cbtn svg, .mix svg { width: 28px; height: 28px; flex: none; stroke: var(--ink); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .cbtn.big svg { width: 32px; height: 32px; }
+  .cbtn.on svg { stroke: var(--accent); fill: var(--accent-dim); filter: drop-shadow(0 0 6px var(--accent-glow)); }
+  .cbtn.bad.on svg { stroke: var(--bad); fill: rgba(255,107,120,0.3); filter: drop-shadow(0 0 6px var(--bad)); }
+  .mix { height: 64px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--accent); background: linear-gradient(90deg, var(--accent-dim), var(--accent-faint));
+    display: flex; align-items: center; gap: 12px; flex: none; font-size: 0.9rem; font-weight: 400; letter-spacing: 0.16em; text-transform: uppercase;
+    box-shadow: 0 0 18px var(--accent-dim); transition: transform 0.1s, background 0.15s; }
+
+
+  /* Music app picker */
+  button.np-src { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; min-height: 44px; padding: 0 16px 0 14px; margin-left: -14px;
+    border-radius: 999px; border: 1px solid var(--accent-dim); background: var(--accent-faint); }
+  button.np-src:active { background: var(--accent-dim); border-color: var(--accent); }
+  button.np-src svg { width: 18px; height: 18px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .srcrow { display: flex; align-items: center; gap: 10px; }
+  a.openapp { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--glass-edge);
+    background: rgba(255,255,255,0.05); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); text-decoration: none; }
+  a.openapp:active { background: var(--accent-dim); border-color: var(--accent); }
+  .picker { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 40px 60px;
+    background: rgba(2,4,10,0.62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .picker.open { opacity: 1; pointer-events: auto; }
+  .sheet { width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: 18px; padding: 22px 26px 26px; }
+  .sheet-head { display: flex; align-items: center; gap: 16px; }
+  .sheet-title { font-size: 1.5rem; font-weight: 300; letter-spacing: 0.04em; }
+  .sheet-sub { font-size: 0.8rem; letter-spacing: 0.12em; color: var(--ink-dim); margin-top: 2px; }
+  .sheet-close { margin-left: 0; width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: center; }
+  .sheet-close svg { width: 26px; height: 26px; stroke: var(--ink); fill: none; stroke-width: 1.8; stroke-linecap: round; }
+  .addsongs { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--accent);
+    background: var(--accent-faint); font-size: 0.9rem; letter-spacing: 0.14em; text-transform: uppercase; }
+  .addsongs:active { background: var(--accent-dim); }
+  .addsongs svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 1.8; stroke-linecap: round; }
+  .apps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; overflow-y: auto; }
+  .app { position: relative; min-height: 132px; padding: 14px 10px; border-radius: 18px; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.05);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; transition: transform 0.1s, background 0.15s, border-color 0.15s; }
+  .app:active { transform: scale(0.95); background: var(--accent-dim); }
+  .app .mono { width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; font-weight: 600; letter-spacing: 0.04em;
+    background: hsl(var(--ah) 70% 34% / 0.75); border: 1px solid hsl(var(--ah) 90% 68% / 0.7); box-shadow: 0 0 16px hsl(var(--ah) 100% 60% / 0.28); }
+  .app .nm { font-size: 1rem; font-weight: 400; letter-spacing: 0.04em; text-align: center; }
+  .app .tag { position: absolute; top: 10px; right: 10px; font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase; padding: 4px 8px; border-radius: 999px; }
+  .app.sel { border-color: var(--accent); background: var(--accent-faint); box-shadow: 0 0 22px var(--accent-dim); }
+  .app.sel .tag { background: var(--accent); color: #02121c; font-weight: 600; }
+  .app.warn .tag { background: rgba(255,181,71,0.18); color: var(--warn); border: 1px solid rgba(255,181,71,0.5); }
+
+  .toast { position: fixed; left: 50%; bottom: 34%; transform: translate(-50%, 20px); z-index: 10; opacity: 0; pointer-events: none;
+    padding: 14px 26px; border-radius: 999px; border: 1px solid var(--accent); background: rgba(6,10,18,0.92);
+    font-size: 0.95rem; letter-spacing: 0.14em; text-transform: uppercase; box-shadow: 0 0 22px var(--accent-dim);
+    transition: opacity 0.2s, transform 0.2s; max-width: calc(100cqw - 32px); text-align: center; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* Shorter screens */
+  @media (max-height: 0px) {
+    .media { height: 224px; }
+    .wavewrap { height: 72px; }
+    .art { width: 96px; height: 96px; }
+    .cbtn { width: 58px; height: 58px; }
+    .cbtn.big { width: 70px; height: 70px; }
+    .mix { height: 58px; }
+    .toast { bottom: 256px; }
+  }
+
+  /* Narrow screens: stack and scroll */
+  @media (max-width: 0px) {
+    html, body { height: auto; }
+    .hub { height: auto; grid-template-columns: 1fr; grid-template-rows: none; padding: 14px 16px; }
+    .swipe { min-height: 440px; }
+    .timep { min-height: 260px; }
+    .media { height: auto; padding-bottom: 16px; }
+    .wavewrap { position: relative !important; left: auto; right: auto; top: auto; margin: 14px 16px 0; height: 72px; }
+    .mrow { position: relative !important; left: auto; right: auto; bottom: auto; flex-wrap: wrap; margin: 14px 16px 0; }
+    .np-meta { flex-basis: 50%; }
+    .controls { flex-wrap: wrap; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bg-beam { animation: none; }
+    .stack { transition: none; }
+  }
+</style>
+
+<div class="bg" aria-hidden="true">
+  <video id="bg-video" muted loop playsinline hidden></video>
+  <div class="bg-glow"></div>
+  <div class="bg-hex"></div>
+  <div class="bg-beam b1"></div>
+  <div class="bg-beam b2"></div>
+  <div class="bg-shade"></div>
+</div>
+
+<main class="hub">
+  <section class="glass swipe" id="swipe" aria-label="Directions and weather">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-0" aria-selected="true" data-i="0">Directions</button>
+      <button class="tab" role="tab" id="tab-1" aria-selected="false" data-i="1">Weather</button>
+      <span class="hint">Swipe up / down</span>
+    </div>
+    <div class="viewport">
+      <div class="dots" aria-hidden="true"><span class="on"></span><span></span></div>
+      <div class="stack" id="stack">
+        <div class="pane" role="tabpanel" aria-labelledby="tab-0">
+          <div class="turn">
+            <svg viewBox="0 0 24 24"><path d="M8 21V11a4 4 0 0 1 4-4h6M14 3l4 4-4 4"/></svg>
+            <div>
+              <div class="turn-dist">0.4 mi</div>
+              <div class="turn-road">Turn right onto Monroe Ave</div>
+            </div>
+          </div>
+          <div class="route">
+            <svg viewBox="0 0 300 120" preserveAspectRatio="none" aria-hidden="true">
+              <path class="grid" vector-effect="non-scaling-stroke" d="M0 30 H300 M0 60 H300 M0 92 H300 M50 0 V120 M110 0 V120 M180 0 V120 M240 0 V120"/>
+              <path class="line" vector-effect="non-scaling-stroke" d="M30 112 C60 100 70 70 110 62 C150 54 160 34 200 28 C230 24 250 14 280 8"/>
+              <circle class="dot" cx="110" cy="62" r="5"/>
+            </svg>
+          </div>
+          <div class="eta">
+            <div class="stat"><b>1:12</b><span>Arrive</span></div>
+            <div class="stat"><b>14 min</b><span>Remaining</span></div>
+            <div class="stat"><b>6.2 mi</b><span>Distance</span></div>
+          </div>
+          <div class="sample">Sample route &middot; not live</div>
+        </div>
+
+        <div class="pane" role="tabpanel" aria-labelledby="tab-1">
+          <div class="wx-now">
+            <svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17 8.5a4.75 4.75 0 0 1 .5 9.5z"/></svg>
+            <div>
+              <div class="wx-temp">54&deg;</div>
+              <div class="wx-cond">Partly cloudy &middot; Rochester</div>
+            </div>
+          </div>
+          <div class="wx-hours">
+            <div class="stat"><b>52&deg;</b><span>2 AM</span></div>
+            <div class="stat"><b>51&deg;</b><span>3 AM</span></div>
+            <div class="stat"><b>50&deg;</b><span>4 AM</span></div>
+            <div class="stat"><b>50&deg;</b><span>5 AM</span></div>
+            <div class="stat"><b>52&deg;</b><span>6 AM</span></div>
+          </div>
+          <div class="eta">
+            <div class="stat"><b>10%</b><span>Rain</span></div>
+            <div class="stat"><b>8 mph</b><span>Wind</span></div>
+            <div class="stat"><b>71%</b><span>Humidity</span></div>
+          </div>
+          <div class="sample">Sample data &middot; not live</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="glass timep" aria-label="Time">
+    <div class="label">Time</div>
+    <div class="time-wrap">
+      <div class="time-big"><span id="clock-hm">12:00</span><span class="time-ampm" id="clock-ampm">AM</span></div>
+      <div class="time-date" id="clock-date">---</div>
+    </div>
+    <div class="foot">
+      <button class="chip" id="awake-btn" aria-pressed="true"><i></i><span id="awake-text">Screen: stays on</span></button>
+      <button class="chip" id="skin-btn" aria-label="Change color theme"><i></i><span id="skin-name">Theme: Blue</span></button>
+      <span class="chip mock" id="link-chip"><i></i><span id="link-text">Mock mode</span></span>
+    </div>
+  </section>
+
+  <section class="glass media" aria-label="Now playing">
+    <div class="wavewrap" id="wavewrap"><canvas id="wave" aria-hidden="true"></canvas></div>
+    <div class="mrow">
+      <div class="art" id="art" role="img" aria-label="Album art"></div>
+      <div class="np-meta">
+        <div class="srcrow"><button class="np-src" id="np-src" aria-haspopup="dialog"><span id="np-src-name">Now playing &middot; YouTube Music</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><a class="openapp" id="open-app" href="#" target="_blank" rel="noopener" hidden>Open app</a></div>
+        <div class="np-title" id="np-title">Cybernetic Groove</div>
+        <div class="np-artist" id="np-artist">Neon Voyager</div>
+        <div class="times"><span id="np-cur">0:00</span> / <span id="np-dur">3:35</span></div>
+      </div>
+      <div class="controls">
+        <button class="cbtn bad" id="btn-dislike" aria-label="Dislike" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M17 3H7.5a2 2 0 0 0-1.9 1.4L3 12.5V14a2 2 0 0 0 2 2h5.5l-.8 3.8a1.6 1.6 0 0 0 2.9 1.2L17 14zM17 3h3v11h-3"/></svg>
+        </button>
+        <button class="cbtn" id="btn-prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button class="cbtn big" id="btn-play" aria-label="Play or pause"><svg id="play-icon" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></button>
+        <button class="cbtn" id="btn-next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        <button class="cbtn" id="btn-like" aria-label="Like" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M7 21H4V10h3zM7 10l3.5-7.2A1.7 1.7 0 0 1 14 3.8L13 9h6a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 17.6 20H7"/></svg>
+        </button>
+      </div>
+      <button class="mix" id="btn-mix">
+        <svg viewBox="0 0 24 24"><path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>
+        <span>Start mix</span>
+      </button>
+    </div>
+  </section>
+
+
+<div class="picker" id="picker" role="dialog" aria-modal="true" aria-label="Choose music app">
+    <div class="glass sheet">
+      <div class="sheet-head">
+        <div>
+          <div class="sheet-title">Choose music app</div>
+          <div class="sheet-sub">The one you pick becomes the default player</div>
+        </div>
+        <button class="addsongs" id="add-songs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add songs</button>
+        <input type="file" id="file-pick" accept="audio/*" multiple hidden>
+        <button class="sheet-close" id="picker-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="apps" id="apps"></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+<script>
+  // ---------------------------------------------------------------
+  // CONFIG: one place to wire buttons to your Automate macros later.
+  // In mock mode every action only shows a confirmation message.
+  // ---------------------------------------------------------------
+  const CONFIG = {
+    mode: 'mock',
+    backgroundVideo: '',   // e.g. 'bg.mp4' placed next to this file
+    nowPlayingUrl: '',     // address your Automate flow serves now-playing info from (JSON)
+    pollMs: 1000,
+    // Music apps shown in the picker. 'target' is what the hub calls when you pick the app
+    // (for example an address your Automate macro listens on). Leave empty in mock mode.
+    sources: [
+      { id: 'local',   name: 'This tablet (test)', short: 'ON', hue: 95, target: '' },
+      { id: 'ytm',     name: 'YouTube Music',  short: 'YT', hue: 0,   link: 'https://music.youtube.com', target: '' },
+      { id: 'spotify', name: 'Spotify',        short: 'SP', hue: 145, link: 'https://open.spotify.com', target: '' },
+      { id: 'amazon',  name: 'Amazon Music',   short: 'AM', hue: 195, link: 'https://music.amazon.com', target: '' },
+      { id: 'apple',   name: 'Apple Music',    short: 'AP', hue: 340, link: 'https://music.apple.com', target: '' },
+      { id: 'pandora', name: 'Pandora',        short: 'PA', hue: 225, link: 'https://www.pandora.com', target: '' },
+      { id: 'tidal',   name: 'Tidal',          short: 'TI', hue: 190, link: 'https://listen.tidal.com', target: '' },
+      { id: 'deezer',  name: 'Deezer',         short: 'DZ', hue: 285, link: 'https://www.deezer.com', target: '' },
+      { id: 'samsung', name: 'Samsung Music',  short: 'SM', hue: 30,  target: '' }
+    ],
+    defaultSource: 'ytm',
+    actions: {
+      like:    { label: 'Liked',          target: '' },
+      dislike: { label: 'Disliked',       target: '' },
+      mix:     { label: 'Starting mix',   target: '' },
+      play:    { label: 'Play / pause',   target: '' },
+      next:    { label: 'Next track',     target: '' },
+      prev:    { label: 'Previous track', target: '' }
+    }
+  };
+
+  let liveFeed = false;
+
+  // Stand-in tracks. Each has a hue that tints the generated album art.
+  const TRACKS = [
+    { title: 'Cybernetic Groove', artist: 'Neon Voyager',  dur: 215, hue: 195, bpm: 112, seed: 1.3 },
+    { title: 'Night Shift',       artist: 'Glass Harbor',  dur: 188, hue: 300, bpm: 98,  seed: 4.1 },
+    { title: 'Lake Effect',       artist: 'Monroe Static', dur: 242, hue: 20,  bpm: 124, seed: 7.7 }
+  ];
+
+  const $ = id => document.getElementById(id);
+  const toastEl = $('toast');
+  let toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
+  }
+  function trigger(name) {
+    const a = CONFIG.actions[name];
+    if (!a) return;
+    if (CONFIG.mode === 'mock') { toast(a.label + ' (mock)'); return; }
+    toast(a.label);
+    if (a.target) { fetch(a.target, { mode: 'no-cors' }).catch(() => {}); }
+  }
+
+  // Color skins: blue (Theme One) and purple (C1)
+  const SKINS = [{ n: 'Blue', h: 205 }, { n: 'Purple', h: 278 }];
+  let skin = 0, skinH = 205;
+  function applySkin(i) {
+    skin = (i + SKINS.length) % SKINS.length;
+    skinH = SKINS[skin].h;
+    document.documentElement.style.setProperty('--h', skinH);
+    $('skin-name').textContent = 'Theme: ' + SKINS[skin].n;
+    try { localStorage.setItem('hub-skin', String(skin)); } catch (e) {}
+  }
+  $('skin-btn').addEventListener('click', () => applySkin(skin + 1));
+  try { const sv = parseInt(localStorage.getItem('hub-skin'), 10); if (!isNaN(sv)) applySkin(sv); } catch (e) {}
+
+  // Clock
+  function tickClock() {
+    const now = new Date();
+    let h = now.getHours();
+    const m = String(now.getMinutes()).padStart(2, '0');
+    $('clock-ampm').textContent = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    $('clock-hm').textContent = h + ':' + m;
+    $('clock-date').textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+  tickClock(); setInterval(tickClock, 1000);
+
+  // ---------------------------------------------------------------
+  // Now playing + album art
+  // ---------------------------------------------------------------
+  let ti = 0, pos = 0, playing = true, dur = 215, bpm = 112, seed = 1.3;
+  const artEl = $('art');
+  const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  const PAUSE = '<path d="M9 5v14M15 5v14"/>';
+  const PLAY = '<path d="M8 5l11 7-11 7z"/>';
+
+  const WN = 240;
+  let wave = new Float32Array(WN);
+  function makeWave(sd) {
+    for (let i = 0; i < WN; i++) {
+      const env = 0.62 + 0.38 * Math.sin(i * 0.031 + sd);
+      const v = Math.abs(Math.sin(i * 0.071 + sd) * 0.6 + Math.sin(i * 0.19 + sd * 2.1) * 0.3 + Math.sin(i * 0.53 + sd * 0.7) * 0.1);
+      wave[i] = Math.max(0.12, Math.min(1, (0.2 + 0.8 * v) * env));
+    }
+  }
+
+  function setPressed(id, on) {
+    const b = $(id); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  function paintGeneratedArt(h) {
+    artEl.style.backgroundImage =
+      'radial-gradient(circle at 28% 24%, hsl(' + h + ' 95% 62%) 0%, transparent 52%),' +
+      'radial-gradient(circle at 78% 78%, hsl(' + ((h + 70) % 360) + ' 85% 52%) 0%, transparent 56%),' +
+      'linear-gradient(135deg, hsl(' + h + ' 45% 14%), hsl(' + ((h + 30) % 360) + ' 55% 8%))';
+    artEl.style.setProperty('--glow', 'hsla(' + h + ', 100%, 60%, 0.5)');
+  }
+  function applyNowPlaying(t) {
+    $('np-title').textContent = t.title;
+    $('np-artist').textContent = t.artist;
+    dur = t.dur; bpm = t.bpm || 110; seed = t.seed || 1;
+    makeWave(seed);
+    $('np-dur').textContent = fmt(dur);
+    if (t.art) {
+      artEl.style.backgroundImage = 'url("' + t.art + '")';
+      artEl.style.setProperty('--glow', 'hsla(' + (t.hue == null ? 200 : t.hue) + ', 100%, 60%, 0.5)');
+    } else {
+      paintGeneratedArt(t.hue == null ? 200 : t.hue);
+    }
+  }
+  function loadTrack(i) {
+    ti = (i + TRACKS.length) % TRACKS.length;
+    pos = 0;
+    applyNowPlaying(TRACKS[ti]);
+    setPressed('btn-like', false); setPressed('btn-dislike', false);
+  }
+  setInterval(() => {
+    if (localActive) {
+      pos = engine.currentTime || 0;
+      if (isFinite(engine.duration) && engine.duration > 0) { dur = engine.duration; $('np-dur').textContent = fmt(dur); }
+      $('np-cur').textContent = fmt(pos);
+      return;
+    }
+    if (!playing) return;
+    pos += 0.25;
+    if (pos >= dur) { if (!liveFeed) loadTrack(ti + 1); else pos = dur; }
+    $('np-cur').textContent = fmt(pos);
+  }, 250);
+
+  $('btn-play').addEventListener('click', () => {
+    if (localActive) { ensureAudio(); if (engine.paused) engine.play().catch(() => {}); else engine.pause(); return; }
+    playing = !playing;
+    $('play-icon').innerHTML = playing ? PAUSE : PLAY;
+    trigger('play');
+  });
+  $('btn-next').addEventListener('click', () => { if (localActive) { playLocal(qi + 1); return; } loadTrack(ti + 1); trigger('next'); });
+  $('btn-prev').addEventListener('click', () => { if (localActive) { if (engine.currentTime > 3) engine.currentTime = 0; else playLocal(qi - 1); return; } loadTrack(ti - 1); trigger('prev'); });
+  $('btn-like').addEventListener('click', () => {
+    const on = !$('btn-like').classList.contains('on');
+    setPressed('btn-like', on); if (on) setPressed('btn-dislike', false);
+    trigger('like');
+  });
+  $('btn-dislike').addEventListener('click', () => {
+    const on = !$('btn-dislike').classList.contains('on');
+    setPressed('btn-dislike', on); if (on) setPressed('btn-like', false);
+    trigger('dislike');
+  });
+  $('btn-mix').addEventListener('click', () => {
+    if (localActive) { shuffleLocal(); return; }
+    CONFIG.actions.mix.label = 'Mix from ' + $('np-title').textContent;
+    trigger('mix');
+  });
+
+  // ---------------------------------------------------------------
+  // Waveform scrubber: played bars glow, unplayed bars are fine ticks.
+  // Bars near the playhead dance with the beat. Tap to seek.
+  // Runs on a simulated spectrum until real data arrives via hub.setSpectrum().
+  // ---------------------------------------------------------------
+  const wrap = $('wavewrap'), cv = $('wave'), ctx = cv.getContext('2d');
+  const NB = 48;
+  const bins = new Float32Array(NB);
+  let ext = null, extAt = 0, dpr = 1;
+
+  function sizeWave() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(2, Math.round(wrap.clientWidth * dpr));
+    cv.height = Math.max(2, Math.round(wrap.clientHeight * dpr));
+  }
+  if (window.ResizeObserver) new ResizeObserver(sizeWave).observe(wrap);
+  window.addEventListener('resize', sizeWave);
+  sizeWave();
+
+  function updateBins(t) {
+    const live = ext && (t - extAt) < 600;
+    const phase = ((t / 1000) * (bpm / 60)) % 1;
+    const kick = playing ? Math.pow(1 - phase, 3) : 0;
+    for (let i = 0; i < NB; i++) {
+      let target;
+      if (live) {
+        target = ext[Math.min(ext.length - 1, Math.floor(i * ext.length / NB))] || 0;
+      } else if (playing) {
+        const f = i / (NB - 1);
+        const wob = 0.5 + 0.5 * Math.sin(t * 0.004 * (1 + f * 5) + i * 1.9);
+        target = 0.1 + 0.55 * kick * (1 - f * 0.6) + 0.34 * wob * (1 - f * 0.45);
+      } else {
+        target = 0.03;
+      }
+      target = Math.max(0, Math.min(1, target));
+      bins[i] += (target - bins[i]) * (target > bins[i] ? 0.55 : 0.14);
+    }
+    if (live) return Math.min(1, (bins[0] + bins[1] + bins[2]) / 2.2);
+    return kick;
+  }
+
+  function drawWave(t) {
+    const kick = updateBins(t);
+    artEl.style.setProperty('--pulse', (1 + kick * 0.03).toFixed(4));
+    const w = cv.width, h = cv.height, mid = h / 2;
+    ctx.clearRect(0, 0, w, h);
+    const step = 7 * dpr, n = Math.floor(w / step);
+    const p = dur ? Math.min(1, pos / dur) : 0, px = p * w;
+
+    // Unplayed ticks
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = (i + 0.5) * step;
+      if (x <= px) continue;
+      const a = wave[Math.floor(i / n * (WN - 1))];
+      const th = (0.1 + 0.2 * a) * h;
+      ctx.moveTo(x, mid - th / 2); ctx.lineTo(x, mid + th / 2);
+    }
+    ctx.stroke();
+
+    // Played bars, with beat movement around the playhead
+    ctx.strokeStyle = 'hsl(' + skinH + ' 100% 66%)';
+    ctx.shadowColor = 'hsl(' + skinH + ' 100% 55%)';
+    ctx.shadowBlur = 9 * dpr;
+    ctx.lineWidth = 3.4 * dpr;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = (i + 0.5) * step;
+      if (x > px) break;
+      const a = wave[Math.floor(i / n * (WN - 1))];
+      const d = Math.abs(x - px) / w;
+      const near = Math.exp(-d * d / 0.0072);
+      const bounce = 1 + near * (0.1 + 0.9 * bins[i % NB]);
+      const th = Math.min(0.96 * h, (0.14 + 0.62 * a) * h * 0.78 * bounce);
+      ctx.moveTo(x, mid - th / 2); ctx.lineTo(x, mid + th / 2);
+    }
+    ctx.stroke();
+
+    // Playhead
+    ctx.shadowBlur = 12 * dpr;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(Math.max(5 * dpr, Math.min(w - 5 * dpr, px)), mid, 5.5 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function frame(t) {
+    if (localActive && analyser) {
+      analyser.getByteFrequencyData(fbuf);
+      if (!feedArr) feedArr = new Float32Array(NB);
+      for (let i = 0; i < NB; i++) {
+        const idx = 1 + Math.floor(Math.pow(i / NB, 1.8) * 190);
+        feedArr[i] = Math.min(1, (fbuf[Math.min(idx, fbuf.length - 1)] / 255) * 1.15);
+      }
+      ext = feedArr; extAt = t;
+    }
+    drawWave(t); requestAnimationFrame(frame);
+  }
+  if (reduceMotion) drawWave(0); else requestAnimationFrame(frame);
+
+  wrap.addEventListener('pointerdown', e => {
+    const r = wrap.getBoundingClientRect();
+    pos = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur;
+    if (localActive && isFinite(engine.duration)) engine.currentTime = pos;
+    $('np-cur').textContent = fmt(pos);
+  });
+
+  // ---------------------------------------------------------------
+  // Swipe pane: up/down flips Directions and Weather
+  // ---------------------------------------------------------------
+  let pane = 0;
+  function showPane(i) {
+    pane = Math.max(0, Math.min(1, i));
+    $('stack').style.transform = 'translateY(' + (-pane * 100) + '%)';
+    document.querySelectorAll('.tab').forEach((t, k) => t.setAttribute('aria-selected', k === pane ? 'true' : 'false'));
+    document.querySelectorAll('.dots span').forEach((d, k) => d.classList.toggle('on', k === pane));
+  }
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showPane(+t.dataset.i)));
+  const sw = $('swipe');
+  let sx = 0, sy = 0, tracking = false;
+  sw.addEventListener('pointerdown', e => { if (e.target.closest('.tab')) return; tracking = true; sx = e.clientX; sy = e.clientY; });
+  sw.addEventListener('pointerup', e => {
+    if (!tracking) return; tracking = false;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) showPane(pane + (dy < 0 ? 1 : -1));
+  });
+  sw.addEventListener('pointercancel', () => { tracking = false; });
+  sw.addEventListener('wheel', e => { e.preventDefault(); showPane(pane + (e.deltaY > 0 ? 1 : -1)); }, { passive: false });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') showPane(pane + 1);
+    if (e.key === 'ArrowUp') showPane(pane - 1);
+  });
+
+  // Optional background video
+  if (CONFIG.backgroundVideo) {
+    const v = $('bg-video');
+    v.src = CONFIG.backgroundVideo; v.hidden = false; v.muted = true;
+    v.play().catch(() => { v.hidden = true; });
+  }
+
+  // Hooks for real data (called later by whatever bridges your Automate macros)
+  window.hub = {
+    setNowPlaying(o) {
+      applyNowPlaying({ title: o.title || '', artist: o.artist || '', dur: o.duration || dur, hue: o.hue, bpm: o.bpm, seed: o.seed || ((o.title || '').split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 7) / 40), art: o.art });
+      if (typeof o.position === 'number') pos = o.position;
+      if (typeof o.playing === 'boolean') { playing = o.playing; $('play-icon').innerHTML = playing ? PAUSE : PLAY; }
+    },
+    // Real list of installed music apps from your phone/tablet automation:
+    // hub.setMediaApps([{ id:'ytm', name:'YouTube Music', status:'ok' }, ...])
+    setMediaApps(list) {
+      if (!Array.isArray(list)) return;
+      CONFIG.sources = list.map((a, i) => ({ id: a.id, name: a.name, short: a.short || a.name.slice(0, 2).toUpperCase(), hue: a.hue == null ? (i * 47) % 360 : a.hue, target: a.target || '', link: a.link || '' }));
+      list.forEach(a => { status[a.id] = a.status || 'ok'; });
+      if (!CONFIG.sources.some(x => x.id === sourceId)) sourceId = CONFIG.sources[0].id;
+      renderSource();
+      if ($('picker').classList.contains('open')) renderApps();
+    },
+    setSpectrum(arr) { ext = arr; extAt = performance.now(); }
+  };
+
+  // ---------------------------------------------------------------
+  // Real playback (source: "This tablet"): plays a built-in test track and any songs you add.
+  // The visualizer then reacts to the actual sound.
+  // ---------------------------------------------------------------
+  const engine = new Audio();
+  engine.preload = 'auto';
+  let localActive = false, ac = null, analyser = null, fbuf = null, feedArr = null;
+  let queue = [], qi = 0;
+
+  function hashHue(str) { let h = 7; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360; return h; }
+  function setLocalChip(on) {
+    if (CONFIG.nowPlayingUrl && liveFeed) return;
+    $('link-chip').classList.toggle('mock', !on);
+    $('link-text').textContent = on ? 'Local playback' : 'Mock mode';
+  }
+
+  // Short synthesized loop (kick, hats, bass, arpeggio) so there is something to play with no files
+  function makeDemoBlob() {
+    const sr = 22050, beat = 60 / 112, beats = 32, n = Math.floor(sr * beat * beats);
+    const roots = [55, 55, 65.41, 49];
+    const scale = [220, 261.63, 329.63, 392, 440, 523.25, 659.25, 523.25];
+    const buf = new ArrayBuffer(44 + n * 2), dv = new DataView(buf);
+    const W = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+    W(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); W(8, 'WAVE'); W(12, 'fmt ');
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+    W(36, 'data'); dv.setUint32(40, n * 2, true);
+    const TAU = Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const b = (i / sr) / beat, bt = (b % 1) * beat;
+      let v = 0;
+      v += 0.85 * Math.sin(TAU * (45 * bt + 80 * (1 - Math.exp(-30 * bt)) / 30)) * Math.exp(-bt * 9);
+      const bo = ((b + 0.5) % 1) * beat;
+      if (bo < 0.07) v += (Math.random() * 2 - 1) * 0.16 * Math.exp(-bo * 80);
+      const bar = Math.floor(b / 4) % 4, f = roots[bar], e8 = ((b * 2) % 1) * (beat / 2);
+      v += 0.3 * (Math.sin(TAU * f * (i / sr)) + 0.35 * Math.sin(TAU * f * 2 * (i / sr))) * Math.exp(-e8 * 6);
+      const s16 = Math.floor(b * 4), e16 = ((b * 4) % 1) * (beat / 4), nf = scale[(s16 * 3 + bar * 2) % 8];
+      v += 0.11 * (Math.sin(TAU * nf * (i / sr)) + 0.3 * Math.sin(TAU * nf * 2 * (i / sr))) * Math.exp(-e16 * 14);
+      dv.setInt16(44 + i * 2, Math.max(-1, Math.min(1, Math.tanh(v * 1.1))) * 32767, true);
+    }
+    return new Blob([buf], { type: 'audio/wav' });
+  }
+
+  function ensureAudio() {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      try {
+        ac = new AC();
+        const node = ac.createMediaElementSource(engine);
+        analyser = ac.createAnalyser();
+        analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.55;
+        node.connect(analyser); analyser.connect(ac.destination);
+        fbuf = new Uint8Array(analyser.frequencyBinCount);
+      } catch (e) { ac = null; analyser = null; }
+    }
+    if (ac && ac.state === 'suspended') ac.resume();
+  }
+
+  function trackInfo(t) {
+    return { title: t.title, artist: t.artist || 'Local file', dur: 0, hue: hashHue(t.title), bpm: 112, seed: hashHue(t.title) / 40, art: t.art };
+  }
+  function playLocal(i) {
+    if (!queue.length) return;
+    qi = (i + queue.length) % queue.length;
+    const t = queue[qi];
+    t.retried = false;
+    engine.src = t.url;
+    applyNowPlaying(trackInfo(t));
+    pos = 0; $('np-cur').textContent = '0:00';
+    setPressed('btn-like', false); setPressed('btn-dislike', false);
+    ensureAudio();
+    engine.play().catch(() => { toast('Tap play to start'); });
+  }
+  function startLocal() {
+    if (!queue.length) {
+      const blob = makeDemoBlob();
+      queue.push({ title: 'Test Tone Groove', artist: 'Built-in test track', blob, url: URL.createObjectURL(blob) });
+    }
+    localActive = true;
+    setLocalChip(true);
+    playLocal(qi);
+  }
+  function stopLocal() {
+    if (!localActive) return;
+    localActive = false;
+    engine.pause();
+    ext = null;
+    playing = true; $('play-icon').innerHTML = PAUSE;
+    setLocalChip(false);
+    loadTrack(ti);
+  }
+  function shuffleLocal() {
+    if (queue.length < 2) { toast('Add more songs to shuffle'); return; }
+    const cur = queue[qi], rest = queue.filter(x => x !== cur);
+    for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+    queue = [cur].concat(rest); qi = 0;
+    toast('Shuffled ' + queue.length + ' songs');
+  }
+
+  engine.addEventListener('play', () => { if (!localActive) return; playing = true; $('play-icon').innerHTML = PAUSE; });
+  engine.addEventListener('pause', () => { if (!localActive) return; playing = false; $('play-icon').innerHTML = PLAY; });
+  engine.addEventListener('ended', () => { if (localActive) playLocal(qi + 1); });
+  engine.addEventListener('loadedmetadata', () => {
+    if (localActive && isFinite(engine.duration)) { dur = engine.duration; $('np-dur').textContent = fmt(dur); }
+  });
+  engine.addEventListener('error', () => {
+    if (!localActive) return;
+    const t = queue[qi];
+    // Some viewers refuse blob audio. Retry once from an embedded copy of the same file.
+    if (t && t.blob && !t.retried) {
+      t.retried = true;
+      const fr = new FileReader();
+      fr.onload = () => { engine.src = fr.result; engine.play().catch(() => {}); };
+      fr.readAsDataURL(t.blob);
+    } else {
+      toast('Could not play this file');
+    }
+  });
+
+  function readTags(file, t) {
+    if (!window.jsmediatags) return;
+    window.jsmediatags.read(file, {
+      onSuccess: tag => {
+        const tg = tag.tags || {};
+        if (tg.title) t.title = tg.title;
+        if (tg.artist) t.artist = tg.artist;
+        if (tg.picture) {
+          try { t.art = URL.createObjectURL(new Blob([new Uint8Array(tg.picture.data)], { type: tg.picture.format || 'image/jpeg' })); } catch (e) {}
+        }
+        if (localActive && queue[qi] === t) {
+          const keep = dur;
+          applyNowPlaying(trackInfo(t)); dur = keep; $('np-dur').textContent = fmt(dur);
+        }
+      },
+      onError: () => {}
+    });
+  }
+  $('add-songs').addEventListener('click', () => $('file-pick').click());
+  $('file-pick').addEventListener('change', e => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const first = queue.length;
+    files.forEach(f => {
+      const t = { title: f.name.replace(/\.[^.]+$/, ''), artist: '', blob: f, url: URL.createObjectURL(f) };
+      queue.push(t); readTags(f, t);
+    });
+    e.target.value = '';
+    sourceId = 'local'; localActive = true;
+    renderSource(); renderApps(); setLocalChip(true);
+    playLocal(first);
+    toast('Added ' + files.length + (files.length === 1 ? ' song' : ' songs'));
+    setTimeout(closePicker, 350);
+  });
+
+  // Live link to the music app. The Automate flow serves JSON like
+  // {"title":"...","artist":"...","art":"<image address or data>","position":12,"duration":215,"playing":true}
+  function setLink(ok) {
+    $('link-chip').classList.toggle('mock', !ok);
+    $('link-text').textContent = ok ? 'Live' : 'Offline';
+  }
+  async function pollNowPlaying() {
+    if (!CONFIG.nowPlayingUrl) return;
+    try {
+      const r = await fetch(CONFIG.nowPlayingUrl, { cache: 'no-store' });
+      const o = await r.json();
+      liveFeed = true;
+      CONFIG.mode = 'live';
+      window.hub.setNowPlaying(o);
+      setLink(true);
+    } catch (e) { setLink(false); }
+  }
+  if (CONFIG.nowPlayingUrl) setInterval(pollNowPlaying, CONFIG.pollMs);
+
+  // ---------------------------------------------------------------
+  // Music app picker: tap the source button to choose the default player.
+  // The choice is remembered on this device. Switch any time, for example
+  // when an app errors or its subscription lapses.
+  // ---------------------------------------------------------------
+  let sourceId = CONFIG.defaultSource;
+  const status = {};   // id -> 'ok' | 'signin' | 'error' (set by hub.setMediaApps)
+  try { const sv = localStorage.getItem('hub-source'); if (sv && sv !== 'local' && CONFIG.sources.some(x => x.id === sv)) sourceId = sv; } catch (e) {}
+  const srcById = id => CONFIG.sources.find(x => x.id === id) || CONFIG.sources[0];
+
+  function renderSource() {
+    const cur = srcById(sourceId);
+    $('np-src-name').textContent = 'Now playing \u00b7 ' + cur.name;
+    const oa = $('open-app');
+    if (cur.link) { oa.href = cur.link; oa.hidden = false; } else { oa.hidden = true; }
+  }
+  function renderApps() {
+    const box = $('apps');
+    box.innerHTML = '';
+    CONFIG.sources.forEach(src => {
+      const b = document.createElement('button');
+      const st = status[src.id];
+      b.className = 'app' + (src.id === sourceId ? ' sel' : '') + (st && st !== 'ok' ? ' warn' : '');
+      b.style.setProperty('--ah', src.hue);
+      b.setAttribute('aria-pressed', src.id === sourceId ? 'true' : 'false');
+      const mono = document.createElement('div'); mono.className = 'mono'; mono.textContent = src.short;
+      const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = src.name;
+      b.append(mono, nm);
+      const label = src.id === sourceId ? 'Default' : st === 'signin' ? 'Sign in' : st === 'error' ? 'Error' : '';
+      if (label) { const tg = document.createElement('div'); tg.className = 'tag'; tg.textContent = label; b.append(tg); }
+      b.addEventListener('click', () => chooseSource(src.id));
+      box.append(b);
+    });
+  }
+  function openPicker() { renderApps(); $('picker').classList.add('open'); }
+  function closePicker() { $('picker').classList.remove('open'); }
+  function chooseSource(id) {
+    sourceId = id;
+    try { localStorage.setItem('hub-source', id); } catch (e) {}
+    const src = srcById(id);
+    renderSource(); renderApps();
+    if (id === 'local') startLocal(); else stopLocal();
+    if (id === 'local') toast('Playing from this tablet');
+    else if (CONFIG.mode === 'mock') toast('Default player: ' + src.name + ' (mock)');
+    else { toast('Default player: ' + src.name); if (src.target) { fetch(src.target, { mode: 'no-cors' }).catch(() => {}); } }
+    setTimeout(closePicker, 350);
+  }
+  $('np-src').addEventListener('click', openPicker);
+  $('picker-close').addEventListener('click', closePicker);
+  $('picker').addEventListener('click', e => { if (e.target === $('picker')) closePicker(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker(); });
+  renderSource();
+
+  // ---------------------------------------------------------------
+  // Keep the screen on while the hub is open. In the standalone app this goes through the app itself;
+  // in a browser it uses the screen wake lock when the browser allows it.
+  // ---------------------------------------------------------------
+  const nativeAwake = typeof window.HubNative !== 'undefined' && typeof window.HubNative.setKeepAwake === 'function';
+  let wl = null, wantAwake = true, nativeOn = false;
+  const wlOk = nativeAwake || 'wakeLock' in navigator;
+  const awakeNow = () => nativeAwake ? nativeOn : !!wl;
+  function paintAwake() {
+    const b = $('awake-btn');
+    b.classList.toggle('mock', !awakeNow());
+    b.setAttribute('aria-pressed', wantAwake ? 'true' : 'false');
+    $('awake-text').textContent = !wlOk ? 'Keep awake: not available' : wantAwake ? (awakeNow() ? 'Screen: stays on' : 'Screen: waiting') : 'Screen: normal';
+  }
+  async function lockScreen() {
+    if (nativeAwake) { nativeOn = wantAwake; try { window.HubNative.setKeepAwake(wantAwake); } catch (e) { nativeOn = false; } paintAwake(); return; }
+    if (!wantAwake || !wlOk || wl || document.visibilityState !== 'visible') { paintAwake(); return; }
+    try {
+      wl = await navigator.wakeLock.request('screen');
+      wl.addEventListener('release', () => { wl = null; paintAwake(); });
+    } catch (e) { wl = null; }
+    paintAwake();
+  }
+  $('awake-btn').addEventListener('click', () => {
+    wantAwake = !wantAwake;
+    if (wantAwake || nativeAwake) lockScreen(); else if (wl) { wl.release(); wl = null; paintAwake(); } else paintAwake();
+  });
+  document.addEventListener('visibilitychange', lockScreen);
+  if (!nativeAwake) document.addEventListener('pointerdown', lockScreen);
+  lockScreen();
+
+  // Fit the fixed 1280x800 landscape layout to whatever screen or frame this opens in
+  function fitStage() {
+    const k = Math.min(window.innerWidth / 1280, window.innerHeight / 800);
+    document.documentElement.style.setProperty('--fit', k.toFixed(4));
+  }
+  window.addEventListener('resize', fitStage);
+  fitStage();
+
+  loadTrack(0);
+</script>
+
+</body>
+</html>

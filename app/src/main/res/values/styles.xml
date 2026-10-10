@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Hub" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/hub_black</item>
+        <item name="android:statusBarColor">@color/hub_black</item>
+        <item name="android:navigationBarColor">@color/hub_black</item>
+    </style>
+</resources>
