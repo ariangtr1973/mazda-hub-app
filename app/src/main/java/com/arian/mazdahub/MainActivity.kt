@@ -15,6 +15,9 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.media.audiofx.Visualizer
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Build
 import android.os.SystemClock
 import android.os.Handler
@@ -184,6 +187,47 @@ class MainActivity : Activity() {
         } catch (e: Exception) { viz = null }
     }
 
+    // ---- live location for the hub map ----
+    private var lm: LocationManager? = null
+    private var locOn = false
+    private var gpsAt = 0L
+    private val locL = object : LocationListener {
+        override fun onLocationChanged(l: Location) {
+            if (l.provider == LocationManager.GPS_PROVIDER) gpsAt = SystemClock.elapsedRealtime()
+            else if (SystemClock.elapsedRealtime() - gpsAt < 15000) return   // GPS fix is fresher and better
+            pushLoc(l)
+        }
+        @Deprecated("old API") override fun onStatusChanged(p: String?, s: Int, e: Bundle?) {}
+        override fun onProviderEnabled(p: String) {}
+        override fun onProviderDisabled(p: String) {}
+    }
+
+    private fun pushLoc(l: Location) {
+        pushJs("hub.setLoc({lat:" + l.latitude + ",lon:" + l.longitude + ",acc:" + l.accuracy +
+            ",bearing:" + (if (l.hasBearing()) l.bearing else -1f) + ",speed:" + (if (l.hasSpeed()) l.speed else 0f) +
+            ",prov:'" + l.provider + "'})")
+    }
+
+    private fun startLoc() {
+        if (locOn || checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            val m = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            lm = m
+            for (p in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+                if (m.isProviderEnabled(p)) m.requestLocationUpdates(p, 1000L, 0f, locL, Looper.getMainLooper())
+            }
+            for (p in listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)) {
+                m.getLastKnownLocation(p)?.let { pushLoc(it) }
+            }
+            locOn = true
+        } catch (e: Exception) { locOn = false }
+    }
+
+    private fun stopLoc() {
+        try { lm?.removeUpdates(locL) } catch (e: Exception) { }
+        locOn = false
+    }
+
     private fun stopViz() {
         try { viz?.enabled = false; viz?.release() } catch (e: Exception) { }
         viz = null
@@ -192,6 +236,7 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_MIC) { startViz(); pushJs("renderSetup()") }
+        if (requestCode == REQ_LOC) { startLoc(); pushJs("renderSetup()") }
     }
 
     private fun js(code: String) { runOnUiThread { web.evaluateJavascript(code, null) } }
@@ -233,8 +278,8 @@ class MainActivity : Activity() {
     }
 
     private var visible = false
-    override fun onResume() { super.onResume(); visible = true; startViz(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
-    override fun onPause() { visible = false; stopViz(); super.onPause() }
+    override fun onResume() { super.onResume(); visible = true; startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
+    override fun onPause() { visible = false; stopViz(); stopLoc(); super.onPause() }
 
     /** Tries three ways to get the hub back in front of the music app. */
     private fun bringHubToFront(id: Int) {
@@ -384,6 +429,8 @@ class MainActivity : Activity() {
             o.put("write", Settings.System.canWrite(c))
             o.put("battery", pm.isIgnoringBatteryOptimizations(c.packageName))
             o.put("notif", NowPlayingService.inst != null || android.provider.Settings.Secure.getString(c.contentResolver, "enabled_notification_listeners")?.contains(c.packageName) == true)
+            o.put("loc", checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+            o.put("gps", packageManager.hasSystemFeature(PackageManager.FEATURE_LOCATION_GPS))
             o.put("mic", checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
             o.put("btPerm", Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)
             o.put("carAddr", p.getString("car_addr", ""))
@@ -406,6 +453,7 @@ class MainActivity : Activity() {
                         "write" -> startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, pkg))
                         "battery" -> startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
                         "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        "loc" -> requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQ_LOC)
                         "mic" -> requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
                         "bt" -> if (Build.VERSION.SDK_INT >= 31) requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQ_BT)
                         "home" -> startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
@@ -442,6 +490,7 @@ class MainActivity : Activity() {
         private const val REQ_FILE = 1001
         private const val REQ_BT = 1002
         private const val REQ_MIC = 1003
+        private const val REQ_LOC = 1004
         @Volatile var live: MainActivity? = null
     }
 }

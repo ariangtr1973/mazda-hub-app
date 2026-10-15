@@ -196,6 +196,49 @@
   a.openapp[hidden] { display: none; }
   .navreal { display: flex; flex-direction: column; gap: 14px; }
   .wavewrap { height: 96px !important; top: 10px !important; }
+
+  /* Big keycap controls (easy to hit while driving) */
+  .controls { gap: 14px; }
+  .cbtn, .mix { flex-direction: column; gap: 6px; border-radius: 24px; width: 98px; height: 108px; padding: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.05) 46%, rgba(0,0,0,0.18) 100%);
+    border: 1px solid rgba(255,255,255,0.32); border-bottom-color: rgba(255,255,255,0.10);
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.38), inset 0 -2px 0 rgba(0,0,0,0.45), 0 6px 14px rgba(0,0,0,0.5); }
+  .cbtn.big { width: 128px; height: 108px; border-color: var(--accent); background: linear-gradient(180deg, hsl(var(--h) 100% 62% / 0.50), hsl(var(--h) 100% 50% / 0.14) 60%, rgba(0,0,0,0.2));
+    box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.45), inset 0 -2px 0 rgba(0,0,0,0.4), 0 0 24px var(--accent-dim), 0 6px 14px rgba(0,0,0,0.5); }
+  .mix { width: 150px; border-color: var(--accent); border-radius: 24px; padding: 0 8px; font-size: 0.78rem; text-align: center; line-height: 1.15; }
+  .cbtn svg, .mix svg { width: 42px; height: 42px; stroke-width: 1.7; }
+  .cbtn.big svg { width: 50px; height: 50px; }
+  .cbtn .cap { font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-dim); }
+  .cbtn.big .cap { color: var(--ink); }
+  .cbtn:active, .mix:active { transform: translateY(2px) scale(0.97); background: var(--accent-dim); box-shadow: inset 0 2px 6px rgba(0,0,0,0.5); }
+  .mix span { white-space: normal; }
+
+  /* Flip between Directions and Weather */
+  .viewport { perspective: 1400px; }
+  .stack { position: relative; height: 100%; transform-style: preserve-3d; transition: transform 0.8s cubic-bezier(0.45, 0.05, 0.25, 1); }
+  .stack > .pane { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .stack > .pane:nth-child(2) { transform: rotateX(180deg); }
+
+  /* Map */
+  .navreal[hidden], #nav-mock[hidden] { display: none; }
+  .navreal { flex: 1 1 0; min-height: 0; display: flex; }
+  .mapbox { position: relative; flex: 1 1 0; min-height: 0; border-radius: 14px; overflow: hidden; background: #0a1017; border: 1px solid var(--glass-edge); }
+  .map-tiles { position: absolute; inset: 0; filter: saturate(1.15) brightness(1.1) hue-rotate(calc(var(--h) * 1deg - 205deg)); }
+  .map-tiles .tile { position: absolute; left: 0; top: 0; width: 256px; height: 256px; max-width: none; user-select: none; -webkit-user-drag: none; }
+  .map-acc { position: absolute; left: 0; top: 0; border-radius: 50%; background: hsl(var(--h) 100% 60% / 0.16); border: 1px solid hsl(var(--h) 100% 70% / 0.5); pointer-events: none; display: none; }
+  .map-me { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+  .map-me svg { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; fill: var(--accent); stroke: #fff; stroke-width: 2.2; stroke-linejoin: round; filter: drop-shadow(0 0 8px var(--accent-glow)); transition: transform 0.4s linear; display: none; }
+  .map-me i { position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; box-shadow: 0 0 14px var(--accent-glow); }
+  .mapbox .turn { position: absolute; left: 10px; right: 10px; top: 10px; width: auto; z-index: 3; background: rgba(6,10,16,0.82); text-align: left; }
+  .mapbox .turn .turn-dist { font-size: clamp(1.2rem, 2.2cqw, 2rem); }
+  .mapbox .navapps { position: absolute; left: 10px; bottom: 10px; z-index: 3; gap: 10px; }
+  .mapbox .navapp { min-height: 60px; background: rgba(6,10,16,0.84); }
+  .mapzoom { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: flex; flex-direction: column; gap: 8px; }
+  .mapzoom button { width: 60px; height: 60px; border-radius: 16px; border: 1px solid var(--glass-edge); background: rgba(6,10,16,0.84); font-size: 2rem; line-height: 1; color: var(--ink); }
+  .mapzoom button:active { background: var(--accent-dim); }
+  .mapstat { position: absolute; right: 80px; bottom: 12px; z-index: 3; font-size: 0.72rem; letter-spacing: 0.1em; color: var(--ink-soft); background: rgba(6,10,16,0.8); padding: 6px 10px; border-radius: 999px; }
+  .mapattr { position: absolute; left: 10px; top: auto; bottom: 74px; z-index: 2; font-size: 0.55rem; color: rgba(255,255,255,0.5); display: none; }
+  .navapps { display: flex; flex-wrap: wrap; gap: 12px; }
   /* Lite mode: lighter effects for low-end tablets */
   html.lite .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
   html.lite .picker .glass { background: rgba(8,16,30,0.94); }
@@ -254,7 +297,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .bg-beam { animation: none; }
-    .stack { transition: none; }
+    .stack { transition: none !important; }
   }
 </style>
 
@@ -279,16 +322,22 @@
       <div class="stack" id="stack">
         <div class="pane" role="tabpanel" aria-labelledby="tab-0">
           <div class="navreal" id="nav-real" hidden>
-            <button class="turn navturn" id="nav-turn" aria-label="Open navigation app">
-              <svg viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6"/></svg>
-              <div>
-                <div class="turn-dist" id="nav-t1">Not navigating</div>
-                <div class="turn-road" id="nav-t2">Pick a navigation app to start a trip</div>
-              </div>
-            </button>
-            <div class="setlab">Start navigation</div>
-            <div class="navapps" id="nav-apps"></div>
-            <div class="sample navnote" id="nav-note"></div>
+            <div class="mapbox" id="map">
+              <div class="map-tiles" id="map-tiles"></div>
+              <div class="map-acc" id="map-acc"></div>
+              <div class="map-me" id="map-me"><svg viewBox="0 0 40 40" id="map-arrow"><path d="M20 4 L31 34 L20 28 L9 34 Z"/></svg><i id="map-dot"></i></div>
+              <button class="turn navturn" id="nav-turn" aria-label="Open navigation app">
+                <svg viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6"/></svg>
+                <div>
+                  <div class="turn-dist" id="nav-t1">Not navigating</div>
+                  <div class="turn-road" id="nav-t2">Tap an app below to start a trip</div>
+                </div>
+              </button>
+              <div class="navapps" id="nav-apps"></div>
+              <div class="mapzoom"><button id="map-zin" aria-label="Zoom in">+</button><button id="map-zout" aria-label="Zoom out">&minus;</button></div>
+              <div class="mapstat" id="map-stat">Waiting for location&hellip;</div>
+              <div class="mapattr">&copy; OpenStreetMap &copy; CARTO</div>
+            </div>
           </div>
           <div id="nav-mock">
           <div class="turn">
@@ -318,11 +367,11 @@
           <div class="wx-now">
             <svg viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17 8.5a4.75 4.75 0 0 1 .5 9.5z"/></svg>
             <div>
-              <div class="wx-temp">54&deg;</div>
-              <div class="wx-cond">Partly cloudy &middot; Rochester</div>
+              <div class="wx-temp" id="wx-temp">54&deg;</div>
+              <div class="wx-cond" id="wx-cond">Partly cloudy &middot; Rochester</div>
             </div>
           </div>
-          <div class="wx-hours">
+          <div class="wx-hours" id="wx-hours">
             <div class="stat"><b>52&deg;</b><span>2 AM</span></div>
             <div class="stat"><b>51&deg;</b><span>3 AM</span></div>
             <div class="stat"><b>50&deg;</b><span>4 AM</span></div>
@@ -330,11 +379,11 @@
             <div class="stat"><b>52&deg;</b><span>6 AM</span></div>
           </div>
           <div class="eta">
-            <div class="stat"><b>10%</b><span>Rain</span></div>
-            <div class="stat"><b>8 mph</b><span>Wind</span></div>
-            <div class="stat"><b>71%</b><span>Humidity</span></div>
+            <div class="stat"><b id="wx-rain">10%</b><span>Rain</span></div>
+            <div class="stat"><b id="wx-wind">8 mph</b><span>Wind</span></div>
+            <div class="stat"><b id="wx-hum">71%</b><span>Humidity</span></div>
           </div>
-          <div class="sample">Sample data &middot; not live</div>
+          <div class="sample" id="wx-note">Sample data &middot; not live</div>
         </div>
       </div>
     </div>
@@ -367,13 +416,13 @@
       <div class="controls">
         <button class="cbtn bad" id="btn-dislike" aria-label="Dislike" aria-pressed="false">
           <svg viewBox="0 0 24 24"><path d="M17 3H7.5a2 2 0 0 0-1.9 1.4L3 12.5V14a2 2 0 0 0 2 2h5.5l-.8 3.8a1.6 1.6 0 0 0 2.9 1.2L17 14zM17 3h3v11h-3"/></svg>
-        </button>
-        <button class="cbtn" id="btn-prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-        <button class="cbtn big" id="btn-play" aria-label="Play or pause"><svg id="play-icon" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></button>
-        <button class="cbtn" id="btn-next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        <span class="cap">Dislike</span></button>
+        <button class="cbtn" id="btn-prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><span class="cap">Back</span></button>
+        <button class="cbtn big" id="btn-play" aria-label="Play or pause"><svg id="play-icon" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span class="cap" id="play-cap">Pause</span></button>
+        <button class="cbtn" id="btn-next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg><span class="cap">Next</span></button>
         <button class="cbtn" id="btn-like" aria-label="Like" aria-pressed="false">
           <svg viewBox="0 0 24 24"><path d="M7 21H4V10h3zM7 10l3.5-7.2A1.7 1.7 0 0 1 14 3.8L13 9h6a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 17.6 20H7"/></svg>
-        </button>
+        <span class="cap">Like</span></button>
       </div>
       <button class="mix" id="btn-mix">
         <svg viewBox="0 0 24 24"><path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>
@@ -415,6 +464,7 @@
           <button class="srow" id="p-write"><span>Change screen timeout</span><span class="st" id="s-write"></span></button>
           <button class="srow" id="p-battery"><span>Run in background</span><span class="st" id="s-battery"></span></button>
           <button class="srow" id="p-notif"><span>Now playing and navigation info</span><span class="st" id="s-notif"></span></button>
+          <button class="srow" id="p-loc"><span>Location (for the map)</span><span class="st" id="s-loc"></span></button>
           <button class="srow" id="p-mic"><span>Live visualizer (no recording)</span><span class="st" id="s-mic"></span></button>
           <button class="srow" id="p-bt"><span>Bluetooth access</span><span class="st" id="s-bt"></span></button>
           <button class="srow" id="p-home"><span>Make Mazda Hub the home app</span><span class="st">Open</span></button>
@@ -425,6 +475,7 @@
           <div class="setlab">Auto start</div>
           <button class="srow" id="p-auto"><span>Start music when car connects</span><span class="st" id="s-auto"></span></button>
           <button class="srow" id="p-delay"><span>Wait before play</span><span class="st ok" id="s-delay"></span></button>
+          <button class="srow" id="p-flip"><span>Auto flip map and weather</span><span class="st" id="s-flip"></span></button>
           <button class="srow" id="p-lite"><span>Lite mode (faster on older tablets)</span><span class="st" id="s-lite"></span></button>
           <button class="srow" id="p-test"><span>Test auto start now</span><span class="st">Run</span></button>
           <div class="autoline" id="autoline"></div>
@@ -604,7 +655,7 @@
   $('btn-play').addEventListener('click', () => {
     if (localActive) { ensureAudio(); if (engine.paused) engine.play().catch(() => {}); else engine.pause(); return; }
     playing = !playing;
-    $('play-icon').innerHTML = playing ? PAUSE : PLAY;
+    $('play-icon').innerHTML = playing ? PAUSE : PLAY; { const pc = $('play-cap'); if (pc) pc.textContent = playing ? 'Pause' : 'Play'; }
     trigger('play');
   });
   $('btn-next').addEventListener('click', () => { if (localActive) { playLocal(qi + 1); return; } loadTrack(ti + 1); trigger('next'); });
@@ -753,12 +804,23 @@
   // Swipe pane: up/down flips Directions and Weather
   // ---------------------------------------------------------------
   let pane = 0;
-  function showPane(i) {
-    pane = Math.max(0, Math.min(1, i));
-    $('stack').style.transform = 'translateY(' + (-pane * 100) + '%)';
+  let holdUntil = 0, lastFlip = Date.now();
+  function showPane(i, auto) {
+    const np = Math.max(0, Math.min(1, i));
+    if (!auto) holdUntil = Date.now() + 30000;   // a manual flip pauses the auto flip for 30 s
+    if (np !== pane) lastFlip = Date.now();
+    pane = np;
+    $('stack').style.transform = 'rotateX(' + (-pane * 180) + 'deg)';
     document.querySelectorAll('.tab').forEach((t, k) => t.setAttribute('aria-selected', k === pane ? 'true' : 'false'));
     document.querySelectorAll('.dots span').forEach((d, k) => d.classList.toggle('on', k === pane));
   }
+  let autoFlip = true;
+  try { autoFlip = localStorage.getItem('hub-autoflip') !== '0'; } catch (e) {}
+  setInterval(() => {
+    if (!autoFlip || Date.now() < holdUntil || document.visibilityState === 'hidden') return;
+    if ($('picker').classList.contains('open') || $('setup').classList.contains('open')) return;
+    if (Date.now() - lastFlip >= (pane === 0 ? 15000 : 8000)) showPane(1 - pane, true);
+  }, 500);
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showPane(+t.dataset.i)));
   const sw = $('swipe');
   let sx = 0, sy = 0, tracking = false;
@@ -787,7 +849,7 @@
     setNowPlaying(o) {
       applyNowPlaying({ title: o.title || '', artist: o.artist || '', dur: o.duration || dur, hue: o.hue, bpm: o.bpm, seed: o.seed || ((o.title || '').split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 7) / 40), art: o.art });
       if (typeof o.position === 'number') pos = o.position;
-      if (typeof o.playing === 'boolean') { playing = o.playing; $('play-icon').innerHTML = playing ? PAUSE : PLAY; }
+      if (typeof o.playing === 'boolean') { playing = o.playing; $('play-icon').innerHTML = playing ? PAUSE : PLAY; { const pc = $('play-cap'); if (pc) pc.textContent = playing ? 'Pause' : 'Play'; } }
     },
     // Real list of installed music apps from your phone/tablet automation:
     // hub.setMediaApps([{ id:'ytm', name:'YouTube Music', status:'ok' }, ...])
@@ -815,7 +877,7 @@
       liveNow = true; liveFeed = true; nowPkg = o.pkg || '';
       applyNowPlaying({ title: o.title || 'Unknown title', artist: o.artist || o.album || '', dur: o.dur || 0, hue: hashHue(key), art: o.art || '' });
       dur = o.dur || 0; anchorPos = o.pos || 0; anchorAt = performance.now(); pos = anchorPos;
-      playing = !!o.playing; $('play-icon').innerHTML = playing ? PAUSE : PLAY;
+      playing = !!o.playing; $('play-icon').innerHTML = playing ? PAUSE : PLAY; { const pc = $('play-cap'); if (pc) pc.textContent = playing ? 'Pause' : 'Play'; }
       $('np-dur').textContent = dur > 0 ? fmt(dur) : '';
       const sv = CONFIG.sources.find(x => x.id === nowPkg); if (sv) $('np-src-name').textContent = 'Now playing \u00b7 ' + sv.name;
     },
@@ -1123,7 +1185,7 @@
     if (!NATIVE) return;
     const has = o && o.has;
     $('nav-t1').textContent = has ? (o.title || 'Navigating') : 'Not navigating';
-    $('nav-t2').textContent = has ? ([o.text, o.sub].filter(Boolean).join(' \u00b7 ')) : 'Pick a navigation app to start a trip';
+    $('nav-t2').textContent = has ? ([o.text, o.sub].filter(Boolean).join(' \u00b7 ')) : 'Tap an app below to start a trip';
     navPkg = has ? o.pkg : navPkg;
     micOk = micOk;
   }
@@ -1142,17 +1204,17 @@
       box.append(b);
     });
     let c = {}; try { c = JSON.parse(H().getSetup()); } catch (e) {}
-    $('nav-note').textContent = c.notif ? 'Turn-by-turn from your navigation app shows here while you drive.' : 'Allow Now playing and navigation info in Setup to show turns here.';
   }
   $('nav-turn').addEventListener('click', () => { if (NATIVE && navPkg) { try { H().launchApp(navPkg); } catch (e) {} } });
   function stat(id, ok) { const e = $(id); e.textContent = ok ? 'On' : 'Allow'; e.className = 'st ' + (ok ? 'ok' : 'no'); }
   function renderSetup() {
     if (!NATIVE) return;
     let c; try { c = JSON.parse(H().getSetup()); } catch (e) { return; }
-    micOk = !!c.mic; stat('s-notif', c.notif); stat('s-mic', c.mic);
+    micOk = !!c.mic; stat('s-notif', c.notif); stat('s-mic', c.mic); stat('s-loc', c.loc);
     stat('s-overlay', c.overlay); stat('s-write', c.write); stat('s-battery', c.battery); stat('s-bt', c.btPerm);
     $('s-auto').textContent = c.auto ? 'On' : 'Off'; $('s-auto').className = 'st ' + (c.auto ? 'ok' : '');
     $('s-delay').textContent = c.delay + ' s';
+    $('s-flip').textContent = autoFlip ? 'On' : 'Off'; $('s-flip').className = 'st ' + (autoFlip ? 'ok' : '');
     $('s-lite').textContent = isLite() ? 'On' : 'Off'; $('s-lite').className = 'st ' + (isLite() ? 'ok' : '');
     const box = $('car-list'); box.innerHTML = '';
     let devs = []; try { devs = JSON.parse(H().getBtDevices()); } catch (e) {}
@@ -1173,10 +1235,11 @@
   });
   $('setup-close').addEventListener('click', () => $('setup').classList.remove('open'));
   $('setup').addEventListener('click', e => { if (e.target === $('setup')) $('setup').classList.remove('open'); });
-  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
+  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-loc', 'loc'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
     $(id).addEventListener('click', () => { if (NATIVE) H().openSetup(k); }));
   $('p-auto').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setAuto(!c.auto); renderSetup(); });
   $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });
+  $('p-flip').addEventListener('click', () => { autoFlip = !autoFlip; try { localStorage.setItem('hub-autoflip', autoFlip ? '1' : '0'); } catch (e) {} renderSetup(); });
   $('p-lite').addEventListener('click', () => { const on = !isLite(); liteOn(on); try { localStorage.setItem('hub-lite', on ? '1' : '0'); } catch (e) {} renderSetup(); });
   $('p-test').addEventListener('click', () => { H().testAuto(); $('setup').classList.remove('open'); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('setup').classList.contains('open')) renderSetup(); });
@@ -1191,6 +1254,102 @@
     window.addEventListener('focus', () => { loadNavApps(); try { micOk = !!JSON.parse(H().getSetup()).mic; } catch (e) {} });
   }
   if (NATIVE) { $('link-text').textContent = 'Mazda Hub app'; $('link-chip').classList.remove('mock'); loadNativeApps(); renderSource(); }
+
+
+  // ---------------------------------------------------------------
+  // In-hub map: dark street tiles centered on the live location. Turn text comes from the navigation app.
+  // ---------------------------------------------------------------
+  const TM = (() => {
+    const el = $('map'), layer = $('map-tiles'), me = $('map-me'), accEl = $('map-acc'), arrow = $('map-arrow'), dot = $('map-dot');
+    let z = 16, lat = 43.1566, lon = -77.6088, bearing = -1, accM = 0, tiles = new Map(), got = false;
+    const subs = ['a', 'b', 'c', 'd'];
+    try { const sz = parseInt(localStorage.getItem('hub-zoom'), 10); if (sz >= 11 && sz <= 19) z = sz; } catch (e) {}
+    const proj = (la, lo, zz) => {
+      const sc = 256 * Math.pow(2, zz), sn = Math.sin(la * Math.PI / 180);
+      return [(lo + 180) / 360 * sc, (0.5 - Math.log((1 + sn) / (1 - sn)) / (4 * Math.PI)) * sc];
+    };
+    function render() {
+      const w = el.clientWidth, h = el.clientHeight;
+      if (!w || !h) return;
+      const [cx, cy] = proj(lat, lon, z), n = Math.pow(2, z), keep = new Set();
+      const x0 = Math.floor((cx - w / 2) / 256), x1 = Math.floor((cx + w / 2) / 256);
+      const y0 = Math.floor((cy - h / 2) / 256), y1 = Math.floor((cy + h / 2) / 256);
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+        if (ty < 0 || ty >= n) continue;
+        const wx = ((tx % n) + n) % n, key = z + '/' + wx + '/' + ty + '/' + tx;
+        keep.add(key);
+        let im = tiles.get(key);
+        if (!im) {
+          im = new Image(); im.className = 'tile'; im.alt = ''; im.draggable = false; im.style.visibility = 'hidden';
+          im.onload = () => { im.style.visibility = 'visible'; };
+          im.src = 'https://' + subs[(wx + ty) % 4] + '.basemaps.cartocdn.com/dark_all/' + z + '/' + wx + '/' + ty + '@2x.png';
+          layer.appendChild(im); tiles.set(key, im);
+        }
+        im.style.transform = 'translate(' + Math.round(tx * 256 - cx + w / 2) + 'px,' + Math.round(ty * 256 - cy + h / 2) + 'px)';
+      }
+      tiles.forEach((im, k) => { if (!keep.has(k)) { im.remove(); tiles.delete(k); } });
+      me.style.transform = 'translate(' + (w / 2) + 'px,' + (h / 2) + 'px)';
+      const r = accM / (156543.03 * Math.cos(lat * Math.PI / 180) / n);
+      if (got && r > 14) {
+        accEl.style.display = 'block'; accEl.style.width = accEl.style.height = Math.min(r * 2, 900) + 'px';
+        accEl.style.transform = 'translate(' + (w / 2 - Math.min(r, 450)) + 'px,' + (h / 2 - Math.min(r, 450)) + 'px)';
+      } else accEl.style.display = 'none';
+      arrow.style.display = bearing >= 0 ? 'block' : 'none';
+      dot.style.display = bearing >= 0 ? 'none' : 'block';
+      arrow.style.transform = 'rotate(' + Math.max(0, bearing) + 'deg)';
+    }
+    if (window.ResizeObserver) new ResizeObserver(render).observe(el);
+    return {
+      set(o) { lat = o.lat; lon = o.lon; accM = o.acc || 0; if (o.bearing >= 0 && o.speed > 1.2) bearing = o.bearing; else if (!(o.speed > 1.2)) bearing = bearing; got = true; render(); },
+      zoom(d) { z = Math.max(11, Math.min(19, z + d)); try { localStorage.setItem('hub-zoom', String(z)); } catch (e) {} render(); },
+      render, has: () => got, pos: () => [lat, lon]
+    };
+  })();
+  $('map-zin').addEventListener('click', e => { e.stopPropagation(); TM.zoom(1); });
+  $('map-zout').addEventListener('click', e => { e.stopPropagation(); TM.zoom(-1); });
+  let locFirst = true;
+  window.hub.setLoc = o => {
+    TM.set(o);
+    const acc = Math.round(o.acc || 0);
+    $('map-stat').textContent = (o.prov === 'gps' ? 'GPS' : 'Network location') + (acc ? ' \u00b1' + acc + ' m' : '') + (o.speed > 0.5 ? ' \u00b7 ' + Math.round(o.speed * 2.237) + ' mph' : '');
+    if (locFirst) { locFirst = false; loadWx(); }
+  };
+  TM.render();
+
+  // ---------------------------------------------------------------
+  // Live weather (Open-Meteo, no account needed). Falls back to the sample card if offline.
+  // ---------------------------------------------------------------
+  const WXN = { 0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast', 45: 'Fog', 48: 'Fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle', 56: 'Freezing drizzle', 57: 'Freezing drizzle',
+    61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 66: 'Freezing rain', 67: 'Freezing rain', 71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains', 80: 'Showers', 81: 'Showers',
+    82: 'Heavy showers', 85: 'Snow showers', 86: 'Snow showers', 95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm' };
+  async function loadWx() {
+    try {
+      const have = TM.has(), la = TM.pos()[0], lo = TM.pos()[1];
+      const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + la.toFixed(3) + '&longitude=' + lo.toFixed(3) +
+        '&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation_probability' +
+        '&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=2&timezone=auto';
+      const r = await fetch(u, { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json(), c = j.current;
+      $('wx-temp').textContent = Math.round(c.temperature_2m) + '\u00b0';
+      $('wx-cond').textContent = (WXN[c.weather_code] || 'Weather') + ' \u00b7 ' + (have ? 'Your location' : 'Rochester');
+      $('wx-wind').textContent = Math.round(c.wind_speed_10m) + ' mph';
+      $('wx-hum').textContent = Math.round(c.relative_humidity_2m) + '%';
+      const hrs = j.hourly.time, ci = Math.max(0, hrs.findIndex(t => t >= c.time.slice(0, 13) + ':00'));
+      $('wx-rain').textContent = (j.hourly.precipitation_probability[ci] || 0) + '%';
+      const box = $('wx-hours'); box.innerHTML = '';
+      for (let k = 1; k <= 5; k++) {
+        const i = ci + k; if (i >= hrs.length) break;
+        const hr = parseInt(hrs[i].slice(11, 13), 10);
+        const d = document.createElement('div'); d.className = 'stat';
+        d.innerHTML = '<b>' + Math.round(j.hourly.temperature_2m[i]) + '\u00b0</b><span>' + ((hr % 12) || 12) + (hr >= 12 ? ' PM' : ' AM') + '</span>';
+        box.append(d);
+      }
+      $('wx-note').textContent = 'Live \u00b7 updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      $('wx-note').style.color = 'var(--ink-dim)';
+    } catch (e) { /* offline: keep what is shown */ }
+  }
+  loadWx(); setInterval(loadWx, 15 * 60 * 1000);
 
   // Fit the fixed 1280x800 landscape layout to whatever screen or frame this opens in
   function fitStage() {
