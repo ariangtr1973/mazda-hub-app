@@ -166,12 +166,40 @@ class MainActivity : Activity() {
                     if (id != runId) return@postDelayed
                     if (!Ops.musicActive(this)) Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY)
                     // Back to the hub so the music keeps playing underneath it.
-                    startActivity(Intent(this, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                    bringHubToFront(id)
                     say(if (Ops.musicActive(this)) "Playing" else "Music app opened. Press play if it is quiet.")
                 }, 5000)
             }, delay)
         }
+    }
+
+    private var visible = false
+    override fun onResume() { super.onResume(); visible = true }
+    override fun onPause() { visible = false; super.onPause() }
+
+    /** Tries three ways to get the hub back in front of the music app. */
+    private fun bringHubToFront(id: Int) {
+        val me = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        try { startActivity(me) } catch (e: Exception) { }
+        main.postDelayed({
+            if (id != runId || visible) return@postDelayed
+            try {
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                am.moveTaskToFront(taskId, android.app.ActivityManager.MOVE_TASK_WITH_HOME)
+            } catch (e: Exception) { }
+        }, 1200)
+        main.postDelayed({
+            if (id != runId || visible) return@postDelayed
+            try {
+                val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(home)   // the hub is the home app, so this lands on it
+            } catch (e: Exception) { }
+        }, 2600)
+        main.postDelayed({
+            if (id != runId || visible) return@postDelayed
+            say("Could not return to the hub. Turn on Display over other apps in Setup.")
+        }, 4000)
     }
 
     private fun waitOnline(id: Int, maxMs: Long, then: () -> Unit) {
