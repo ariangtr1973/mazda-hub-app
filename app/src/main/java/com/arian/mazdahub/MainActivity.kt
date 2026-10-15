@@ -80,7 +80,11 @@ class MainActivity : Activity() {
             override fun shouldInterceptRequest(
                 view: WebView,
                 request: WebResourceRequest
-            ): WebResourceResponse? = loader.shouldInterceptRequest(request.url)
+            ): WebResourceResponse? {
+                val u = request.url
+                if (u.host == "tile.openstreetmap.org") return mapTile(u.toString())
+                return loader.shouldInterceptRequest(u)
+            }
 
             // Links in the hub (Open app, etc.) open outside the hub, so a service's own app can take them.
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -340,6 +344,27 @@ class MainActivity : Activity() {
             js("window.hub&&hub.setAwake&&hub.setAwake(false)")
             say("Car disconnected")
         }
+    }
+
+    /** Map tiles: fetched with an identifying User-Agent and kept on disk so the map is light on data and works for places you have seen. */
+    private fun mapTile(url: String): WebResourceResponse? {
+        return try {
+            val dir = java.io.File(cacheDir, "tiles"); dir.mkdirs()
+            val file = java.io.File(dir, url.removePrefix("https://tile.openstreetmap.org/").replace('/', '_'))
+            val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < 14L * 24 * 3600 * 1000
+            if (!fresh) {
+                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.setRequestProperty("User-Agent", "MazdaHub/0.7 (personal Android car dashboard)")
+                c.connectTimeout = 8000; c.readTimeout = 8000
+                if (c.responseCode == 200) {
+                    val tmp = java.io.File(dir, file.name + ".tmp")
+                    c.inputStream.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } }
+                    tmp.renameTo(file)
+                } else if (!file.exists()) return null
+                c.disconnect()
+            }
+            WebResourceResponse("image/png", null, file.inputStream())
+        } catch (e: Exception) { null }
     }
 
     @Deprecated("Deprecated in Java")
