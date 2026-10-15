@@ -439,7 +439,12 @@ class MainActivity : Activity() {
 
         @JavascriptInterface fun getNow(): String = NowPlayingService.lastNow
         @JavascriptInterface fun getNav(): String = NowPlayingService.lastNav
-        @JavascriptInterface fun getNavDebug(): String = if (NowPlayingService.inst == null) "Notification access is OFF for Mazda Hub" else if (NowPlayingService.dbg.isEmpty()) "Access is on. No navigation notification seen yet." else NowPlayingService.dbg.joinToString(" | ")
+        @JavascriptInterface fun getNavDebug(): String {
+            if (NowPlayingService.inst == null) return "Notification access is OFF for Mazda Hub"
+            val seen = if (NowPlayingService.seen.isEmpty()) "no notifications yet" else "apps seen: " + NowPlayingService.seen.joinToString(", ") + " (* = ongoing)"
+            val nav = if (NowPlayingService.dbg.isEmpty()) "no Maps/Waze notification" else NowPlayingService.dbg.joinToString(" | ")
+            return "Access is on. $seen. Navigation: $nav"
+        }
         @JavascriptInterface fun getNavApps(): String = try { Ops.navApps(this@MainActivity).toString() } catch (e: Exception) { "[]" }
 
         @JavascriptInterface fun setMusic(pkg: String) { Ops.prefs(this@MainActivity).edit().putString("music_pkg", pkg).apply() }

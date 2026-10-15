@@ -176,6 +176,10 @@ class NowPlayingService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (sbn.packageName != packageName) {
+            val tag = sbn.packageName.substringAfterLast('.') + (if (sbn.isOngoing) "*" else "")
+            seen = (listOf(tag) + seen).distinct().take(8)
+        }
         if (sbn.packageName in navPkgs) { note(sbn); if (isNavNotif(sbn)) navFrom(sbn) }
     }
     override fun onNotificationRemoved(sbn: StatusBarNotification) { if (sbn.packageName in navPkgs) scanNav() }
@@ -185,6 +189,7 @@ class NowPlayingService : NotificationListenerService() {
         @Volatile var controller: MediaController? = null
         @Volatile var lastNow: String = "{\"has\":false}"
         @Volatile var dbg: List<String> = emptyList()
+        @Volatile var seen: List<String> = emptyList()
         @Volatile var lastNav: String = "{\"has\":false}"
     }
 }
