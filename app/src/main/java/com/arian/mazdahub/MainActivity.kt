@@ -14,7 +14,9 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.media.audiofx.Visualizer
 import android.os.Build
+import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -135,6 +137,63 @@ class MainActivity : Activity() {
     }
 
     // ---------------- car auto start: wait for internet, open the music app, press play ----------------
+    fun pushJs(code: String) { runOnUiThread { try { web.evaluateJavascript("try{" + code + "}catch(e){}", null) } catch (e: Exception) { } } }
+
+    // ---- live spectrum for the visualizer (needs the microphone permission; nothing is recorded) ----
+    private var viz: Visualizer? = null
+    private var vizAt = 0L
+
+    private fun startViz() {
+        if (viz != null || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            val v = Visualizer(0)
+            v.captureSize = Visualizer.getCaptureSizeRange()[1].coerceAtMost(1024)
+            v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
+                override fun onWaveFormDataCapture(vz: Visualizer?, w: ByteArray?, r: Int) {}
+                override fun onFftDataCapture(vz: Visualizer?, fft: ByteArray?, r: Int) {
+                    if (fft == null) return
+                    val now = SystemClock.uptimeMillis()
+                    if (now - vizAt < 45) return
+                    vizAt = now
+                    val nb = 48
+                    val half = fft.size / 2
+                    val sb = StringBuilder("[")
+                    var peak = 0f
+                    for (i in 0 until nb) {
+                        val k0 = Math.pow((i / nb.toDouble()), 2.0) * (half * 0.55)
+                        val k1 = Math.pow(((i + 1) / nb.toDouble()), 2.0) * (half * 0.55)
+                        var m = 0f
+                        var k = Math.max(1, k0.toInt())
+                        val kEnd = Math.max(k + 1, k1.toInt())
+                        while (k < kEnd && 2 * k + 1 < fft.size) {
+                            val re = fft[2 * k].toFloat(); val im = fft[2 * k + 1].toFloat()
+                            m = Math.max(m, Math.sqrt((re * re + im * im).toDouble()).toFloat())
+                            k++
+                        }
+                        val v2 = Math.min(1f, Math.sqrt((m / 128f).toDouble()).toFloat() * 1.1f)
+                        if (v2 > peak) peak = v2
+                        if (i > 0) sb.append(',')
+                        sb.append(String.format(java.util.Locale.US, "%.2f", v2))
+                    }
+                    sb.append(']')
+                    pushJs("hub.setSpectrum(" + sb + ")")
+                }
+            }, Visualizer.getMaxCaptureRate() / 2, false, true)
+            v.enabled = true
+            viz = v
+        } catch (e: Exception) { viz = null }
+    }
+
+    private fun stopViz() {
+        try { viz?.enabled = false; viz?.release() } catch (e: Exception) { }
+        viz = null
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_MIC) { startViz(); pushJs("renderSetup()") }
+    }
+
     private fun js(code: String) { runOnUiThread { web.evaluateJavascript(code, null) } }
     private fun say(msg: String) { js("window.hub&&hub.autoStatus&&hub.autoStatus(" + JSONObject.quote(msg) + ")") }
 
@@ -174,8 +233,8 @@ class MainActivity : Activity() {
     }
 
     private var visible = false
-    override fun onResume() { super.onResume(); visible = true }
-    override fun onPause() { visible = false; super.onPause() }
+    override fun onResume() { super.onResume(); visible = true; startViz(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
+    override fun onPause() { visible = false; stopViz(); super.onPause() }
 
     /** Tries three ways to get the hub back in front of the music app. */
     private fun bringHubToFront(id: Int) {
@@ -281,7 +340,36 @@ class MainActivity : Activity() {
 
         @JavascriptInterface fun launchApp(pkg: String): Boolean = Ops.launchApp(this@MainActivity, pkg)
 
-        @JavascriptInterface fun mediaKey(name: String) { Ops.mediaKeyByName(this@MainActivity, name) }
+        @JavascriptInterface fun mediaKey(name: String) {
+            val c = NowPlayingService.controller
+            if (c != null) {
+                val t = c.transportControls
+                val playing = c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
+                when (name) {
+                    "play" -> t.play(); "pause" -> t.pause()
+                    "toggle" -> if (playing) t.pause() else t.play()
+                    "next" -> t.skipToNext(); "prev" -> t.skipToPrevious()
+                }
+            } else Ops.mediaKeyByName(this@MainActivity, name)
+        }
+
+        @JavascriptInterface fun seekTo(ms: Long): Boolean {
+            val c = NowPlayingService.controller ?: return false
+            c.transportControls.seekTo(ms); return true
+        }
+
+        /** Best effort: some apps expose thumbs up / down as custom actions. */
+        @JavascriptInterface fun rate(kind: String): Boolean {
+            val c = NowPlayingService.controller ?: return false
+            val acts = c.playbackState?.customActions ?: return false
+            val want = if (kind == "like") listOf("thumbs_up", "thumbsup", "like", "love", "heart", "favorite") else listOf("thumbs_down", "thumbsdown", "dislike")
+            val hit = acts.firstOrNull { a -> val k = (a.action + " " + a.name).lowercase(); want.any { k.contains(it) } && (kind == "dislike" || !k.contains("dislike")) } ?: return false
+            c.transportControls.sendCustomAction(hit, null); return true
+        }
+
+        @JavascriptInterface fun getNow(): String = NowPlayingService.lastNow
+        @JavascriptInterface fun getNav(): String = NowPlayingService.lastNav
+        @JavascriptInterface fun getNavApps(): String = try { Ops.navApps(this@MainActivity).toString() } catch (e: Exception) { "[]" }
 
         @JavascriptInterface fun setMusic(pkg: String) { Ops.prefs(this@MainActivity).edit().putString("music_pkg", pkg).apply() }
 
@@ -295,6 +383,8 @@ class MainActivity : Activity() {
             o.put("overlay", Settings.canDrawOverlays(c))
             o.put("write", Settings.System.canWrite(c))
             o.put("battery", pm.isIgnoringBatteryOptimizations(c.packageName))
+            o.put("notif", NowPlayingService.inst != null || android.provider.Settings.Secure.getString(c.contentResolver, "enabled_notification_listeners")?.contains(c.packageName) == true)
+            o.put("mic", checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
             o.put("btPerm", Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)
             o.put("carAddr", p.getString("car_addr", ""))
             o.put("carName", p.getString("car_name", ""))
@@ -315,6 +405,8 @@ class MainActivity : Activity() {
                         "overlay" -> startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg))
                         "write" -> startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, pkg))
                         "battery" -> startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
+                        "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        "mic" -> requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
                         "bt" -> if (Build.VERSION.SDK_INT >= 31) requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQ_BT)
                         "home" -> startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
                     }
@@ -349,6 +441,7 @@ class MainActivity : Activity() {
     companion object {
         private const val REQ_FILE = 1001
         private const val REQ_BT = 1002
+        private const val REQ_MIC = 1003
         @Volatile var live: MainActivity? = null
     }
 }

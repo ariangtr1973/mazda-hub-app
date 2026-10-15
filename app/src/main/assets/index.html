@@ -184,6 +184,18 @@
   .chip { background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04)); border-color: rgba(255,255,255,0.28); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
   .cbtn { background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04)); border-color: rgba(255,255,255,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 4px 12px rgba(0,0,0,0.4); }
   .srow, .app { background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22); }
+
+  .navturn { width: 100%; text-align: left; }
+  .navapps { display: flex; flex-wrap: wrap; gap: 12px; }
+  .navapp { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 18px 0 12px; border-radius: 16px; border: 1px solid var(--glass-edge);
+    background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.22); font-size: 1rem; letter-spacing: 0.05em; }
+  .navapp img { width: 40px; height: 40px; border-radius: 10px; }
+  .navapp:active { background: var(--accent-dim); }
+  .navnote { color: var(--ink-dim); text-transform: none; letter-spacing: 0.06em; font-size: 0.78rem; }
+  .art { cursor: pointer; }
+  a.openapp[hidden] { display: none; }
+  .navreal { display: flex; flex-direction: column; gap: 14px; }
+  .wavewrap { height: 96px !important; top: 10px !important; }
   /* Lite mode: lighter effects for low-end tablets */
   html.lite .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
   html.lite .picker .glass { background: rgba(8,16,30,0.94); }
@@ -266,6 +278,19 @@
       <div class="dots" aria-hidden="true"><span class="on"></span><span></span></div>
       <div class="stack" id="stack">
         <div class="pane" role="tabpanel" aria-labelledby="tab-0">
+          <div class="navreal" id="nav-real" hidden>
+            <button class="turn navturn" id="nav-turn" aria-label="Open navigation app">
+              <svg viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6"/></svg>
+              <div>
+                <div class="turn-dist" id="nav-t1">Not navigating</div>
+                <div class="turn-road" id="nav-t2">Pick a navigation app to start a trip</div>
+              </div>
+            </button>
+            <div class="setlab">Start navigation</div>
+            <div class="navapps" id="nav-apps"></div>
+            <div class="sample navnote" id="nav-note"></div>
+          </div>
+          <div id="nav-mock">
           <div class="turn">
             <svg viewBox="0 0 24 24"><path d="M8 21V11a4 4 0 0 1 4-4h6M14 3l4 4-4 4"/></svg>
             <div>
@@ -286,6 +311,7 @@
             <div class="stat"><b>6.2 mi</b><span>Distance</span></div>
           </div>
           <div class="sample">Sample route &middot; not live</div>
+          </div>
         </div>
 
         <div class="pane" role="tabpanel" aria-labelledby="tab-1">
@@ -388,6 +414,8 @@
           <button class="srow" id="p-overlay"><span>Display over other apps</span><span class="st" id="s-overlay"></span></button>
           <button class="srow" id="p-write"><span>Change screen timeout</span><span class="st" id="s-write"></span></button>
           <button class="srow" id="p-battery"><span>Run in background</span><span class="st" id="s-battery"></span></button>
+          <button class="srow" id="p-notif"><span>Now playing and navigation info</span><span class="st" id="s-notif"></span></button>
+          <button class="srow" id="p-mic"><span>Live visualizer (no recording)</span><span class="st" id="s-mic"></span></button>
           <button class="srow" id="p-bt"><span>Bluetooth access</span><span class="st" id="s-bt"></span></button>
           <button class="srow" id="p-home"><span>Make Mazda Hub the home app</span><span class="st">Open</span></button>
         </div>
@@ -467,8 +495,14 @@
     if (!a) return;
     if (NATIVE && (name === 'play' || name === 'next' || name === 'prev')) {
       try { window.HubNative.mediaKey(name === 'play' ? 'toggle' : name); } catch (e) {}
-      toast(a.label); return;
+      return;
     }
+    if (NATIVE && (name === 'like' || name === 'dislike')) {
+      let ok = false; try { ok = window.HubNative.rate(name); } catch (e) {}
+      if (ok) toast(a.label); else { toast('This music app does not allow ' + name + ' from the hub'); setPressed(name === 'like' ? 'btn-like' : 'btn-dislike', false); }
+      return;
+    }
+    if (NATIVE && name === 'mix') { toast('Start mix is not available from the hub yet'); return; }
     if (CONFIG.mode === 'mock') { toast(a.label + ' (mock)'); return; }
     toast(a.label);
     if (a.target) { fetch(a.target, { mode: 'no-cors' }).catch(() => {}); }
@@ -503,6 +537,8 @@
   // Now playing + album art
   // ---------------------------------------------------------------
   let ti = 0, pos = 0, playing = true, dur = 215, bpm = 112, seed = 1.3;
+  let lastKey = '';
+  let liveNow = false, anchorPos = 0, anchorAt = 0, nowPkg = '', micOk = false;
   const artEl = $('art');
   const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
   const PAUSE = '<path d="M9 5v14M15 5v14"/>';
@@ -548,6 +584,11 @@
     setPressed('btn-like', false); setPressed('btn-dislike', false);
   }
   setInterval(() => {
+    if (NATIVE && !localActive) {
+      if (liveNow && !dragging) { pos = playing ? anchorPos + (performance.now() - anchorAt) / 1000 : anchorPos; if (dur > 0 && pos > dur) pos = dur; }
+      $('np-cur').textContent = fmt(pos);
+      return;
+    }
     if (localActive) {
       pos = engine.currentTime || 0;
       if (isFinite(engine.duration) && engine.duration > 0) { dur = engine.duration; $('np-dur').textContent = fmt(dur); }
@@ -604,14 +645,14 @@
   sizeWave();
 
   function updateBins(t) {
-    const live = ext && (t - extAt) < 600;
+    const live = ext && (t - extAt) < 1200;
     const phase = ((t / 1000) * (bpm / 60)) % 1;
-    const kick = playing ? Math.pow(1 - phase, 3) : 0;
+    const kick = (playing && !NATIVE) ? Math.pow(1 - phase, 3) : 0;
     for (let i = 0; i < NB; i++) {
       let target;
       if (live) {
         target = ext[Math.min(ext.length - 1, Math.floor(i * ext.length / NB))] || 0;
-      } else if (playing) {
+      } else if (playing && !NATIVE) {
         const f = i / (NB - 1);
         const wob = 0.5 + 0.5 * Math.sin(t * 0.004 * (1 + f * 5) + i * 1.9);
         target = 0.1 + 0.55 * kick * (1 - f * 0.6) + 0.34 * wob * (1 - f * 0.45);
@@ -625,54 +666,53 @@
     return kick;
   }
 
+  let dragging = false;
   function drawWave(t) {
     const kick = updateBins(t);
     artEl.style.setProperty('--pulse', (1 + kick * 0.03).toFixed(4));
-    const w = cv.width, h = cv.height, mid = h / 2;
+    const w = cv.width, h = cv.height;
     ctx.clearRect(0, 0, w, h);
-    const step = 7 * dpr, n = Math.floor(w / step);
     const p = dur ? Math.min(1, pos / dur) : 0, px = p * w;
+    const base = h * 0.66;           // bars rise from here
+    const trackY = h * 0.86;         // progress line
+    const step = 9 * dpr, n = Math.floor(w / step), c = (n - 1) / 2;
 
-    // Unplayed ticks
+    // Spectrum bars: bass in the middle, highs toward the edges. Bright left of the playhead.
     ctx.lineCap = 'round';
+    ctx.lineWidth = 4.2 * dpr;
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const x = (i + 0.5) * step;
+        if ((x <= px) !== (pass === 0)) continue;
+        const d = Math.abs(i - c) / c;
+        const bi = Math.min(NB - 1, Math.floor(Math.pow(d, 1.15) * (NB - 1)));
+        const bh = Math.max(3 * dpr, bins[bi] * base * 0.96);
+        ctx.moveTo(x, base); ctx.lineTo(x, base - bh);
+      }
+      if (pass === 0) { ctx.strokeStyle = 'hsl(' + skinH + ' 100% 66%)'; ctx.shadowColor = 'hsl(' + skinH + ' 100% 55%)'; ctx.shadowBlur = 8 * dpr; }
+      else { ctx.strokeStyle = 'rgba(255,255,255,0.34)'; ctx.shadowBlur = 0; }
+      ctx.stroke();
+    }
+
+    // Progress line (honest: shows only elapsed vs total)
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 1.6 * dpr;
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const x = (i + 0.5) * step;
-      if (x <= px) continue;
-      const a = wave[Math.floor(i / n * (WN - 1))];
-      const th = (0.1 + 0.2 * a) * h;
-      ctx.moveTo(x, mid - th / 2); ctx.lineTo(x, mid + th / 2);
-    }
-    ctx.stroke();
-
-    // Played bars, with beat movement around the playhead
+    ctx.lineWidth = 5 * dpr;
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath(); ctx.moveTo(6 * dpr, trackY); ctx.lineTo(w - 6 * dpr, trackY); ctx.stroke();
     ctx.strokeStyle = 'hsl(' + skinH + ' 100% 66%)';
-    ctx.shadowColor = 'hsl(' + skinH + ' 100% 55%)';
-    ctx.shadowBlur = 9 * dpr;
-    ctx.lineWidth = 3.4 * dpr;
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const x = (i + 0.5) * step;
-      if (x > px) break;
-      const a = wave[Math.floor(i / n * (WN - 1))];
-      const d = Math.abs(x - px) / w;
-      const near = Math.exp(-d * d / 0.0072);
-      const bounce = 1 + near * (0.1 + 0.9 * bins[i % NB]);
-      const th = Math.min(0.96 * h, (0.14 + 0.62 * a) * h * 0.78 * bounce);
-      ctx.moveTo(x, mid - th / 2); ctx.lineTo(x, mid + th / 2);
-    }
-    ctx.stroke();
-
-    // Playhead
+    ctx.shadowColor = 'hsl(' + skinH + ' 100% 55%)'; ctx.shadowBlur = 10 * dpr;
+    ctx.beginPath(); ctx.moveTo(6 * dpr, trackY); ctx.lineTo(Math.max(6 * dpr, px), trackY); ctx.stroke();
     ctx.shadowBlur = 12 * dpr;
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(Math.max(5 * dpr, Math.min(w - 5 * dpr, px)), mid, 5.5 * dpr, 0, Math.PI * 2);
+    ctx.arc(Math.max(8 * dpr, Math.min(w - 8 * dpr, px)), trackY, (dragging ? 10 : 7.5) * dpr, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
+    if (NATIVE && playing && !(ext && (t - extAt) < 1500) && !micOk) {
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.font = (12 * dpr) + 'px sans-serif'; ctx.textAlign = 'right';
+      ctx.fillText('Visualizer off: allow it in Setup', w - 8 * dpr, 14 * dpr);
+    }
   }
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let lastF = 0;
@@ -692,12 +732,22 @@
   }
   if (reduceMotion) drawWave(0); else requestAnimationFrame(frame);
 
-  wrap.addEventListener('pointerdown', e => {
+  function seekFromEvent(e) {
     const r = wrap.getBoundingClientRect();
-    pos = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur;
+    const k = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    if (dur > 0) { pos = k * dur; anchorPos = pos; anchorAt = performance.now(); $('np-cur').textContent = fmt(pos); }
+  }
+  wrap.addEventListener('pointerdown', e => { dragging = true; try { wrap.setPointerCapture(e.pointerId); } catch (x) {} seekFromEvent(e); });
+  wrap.addEventListener('pointermove', e => { if (dragging) seekFromEvent(e); });
+  function endSeek(e) {
+    if (!dragging) return; dragging = false;
+    seekFromEvent(e);
+    if (dur <= 0) return;
     if (localActive && isFinite(engine.duration)) engine.currentTime = pos;
-    $('np-cur').textContent = fmt(pos);
-  });
+    else if (NATIVE) { let ok = false; try { ok = window.HubNative.seekTo(Math.round(pos * 1000)); } catch (x) {} if (!ok) toast('Allow Now playing access in Setup to seek'); }
+  }
+  wrap.addEventListener('pointerup', endSeek);
+  wrap.addEventListener('pointercancel', () => { dragging = false; });
 
   // ---------------------------------------------------------------
   // Swipe pane: up/down flips Directions and Weather
@@ -749,7 +799,27 @@
       renderSource();
       if ($('picker').classList.contains('open')) renderApps();
     },
-    setSpectrum(arr) { ext = arr; extAt = performance.now(); }
+    setSpectrum(arr) { ext = arr; extAt = performance.now(); },
+    // Real now-playing from the music app (standalone app only)
+    setNow(o) {
+      if (localActive) return;
+      if (!o || !o.has) {
+        liveNow = false; playing = false; nowPkg = '';
+        $('play-icon').innerHTML = PLAY;
+        applyNowPlaying({ title: 'Nothing playing', artist: 'Start a song in your music app', dur: 0, hue: 200 });
+        pos = 0; $('np-dur').textContent = '0:00';
+        return;
+      }
+      const key = (o.title || '') + '|' + (o.artist || '');
+      if (key !== lastKey) { setPressed('btn-like', false); setPressed('btn-dislike', false); lastKey = key; }
+      liveNow = true; liveFeed = true; nowPkg = o.pkg || '';
+      applyNowPlaying({ title: o.title || 'Unknown title', artist: o.artist || o.album || '', dur: o.dur || 0, hue: hashHue(key), art: o.art || '' });
+      dur = o.dur || 0; anchorPos = o.pos || 0; anchorAt = performance.now(); pos = anchorPos;
+      playing = !!o.playing; $('play-icon').innerHTML = playing ? PAUSE : PLAY;
+      $('np-dur').textContent = dur > 0 ? fmt(dur) : '';
+      const sv = CONFIG.sources.find(x => x.id === nowPkg); if (sv) $('np-src-name').textContent = 'Now playing \u00b7 ' + sv.name;
+    },
+    setNav(o) { renderNav(o); }
   };
 
   // ---------------------------------------------------------------
@@ -936,12 +1006,16 @@
   try { const sv = localStorage.getItem('hub-source'); if (sv && sv !== 'local' && CONFIG.sources.some(x => x.id === sv)) sourceId = sv; } catch (e) {}
   const srcById = id => CONFIG.sources.find(x => x.id === id) || CONFIG.sources[0];
 
+  artEl.addEventListener('click', () => {
+    if (NATIVE && !localActive) { const pk = nowPkg || (sourceId !== 'local' ? sourceId : ''); if (pk) { try { window.HubNative.launchApp(pk); } catch (e) {} } else toast('Pick a music app first'); }
+    else if (!NATIVE) { const cur = srcById(sourceId); if (cur.link) window.open(cur.link, '_blank'); }
+  });
   $('open-app').addEventListener('click', e => { if (NATIVE && sourceId !== 'local') { e.preventDefault(); try { window.HubNative.launchApp(sourceId); } catch (x) {} } });
   function renderSource() {
     const cur = srcById(sourceId);
     $('np-src-name').textContent = 'Now playing \u00b7 ' + cur.name;
     const oa = $('open-app');
-    if (NATIVE && cur.id !== 'local') { oa.href = '#'; oa.hidden = false; }
+    if (NATIVE) { oa.hidden = true; }
     else if (cur.link) { oa.href = cur.link; oa.hidden = false; } else { oa.hidden = true; }
   }
   function renderApps() {
@@ -1045,10 +1119,37 @@
     try { if (liteChoice === null && JSON.parse(H().getSetup()).lowRam) { liteOn(true); } } catch (e) {}
   }
   const isLite = () => document.documentElement.classList.contains('lite');
+  function renderNav(o) {
+    if (!NATIVE) return;
+    const has = o && o.has;
+    $('nav-t1').textContent = has ? (o.title || 'Navigating') : 'Not navigating';
+    $('nav-t2').textContent = has ? ([o.text, o.sub].filter(Boolean).join(' \u00b7 ')) : 'Pick a navigation app to start a trip';
+    navPkg = has ? o.pkg : navPkg;
+    micOk = micOk;
+  }
+  let navPkg = '';
+  function loadNavApps() {
+    if (!NATIVE) return;
+    $('nav-mock').hidden = true; $('nav-real').hidden = false;
+    let apps = []; try { apps = JSON.parse(H().getNavApps()); } catch (e) {}
+    const box = $('nav-apps'); box.innerHTML = '';
+    if (!apps.length) { box.textContent = 'No navigation app found. Install Google Maps or Waze.'; }
+    apps.forEach(a => {
+      const b = document.createElement('button'); b.className = 'navapp';
+      if (a.icon) { const im = document.createElement('img'); im.src = a.icon; im.alt = ''; b.append(im); }
+      const sp = document.createElement('span'); sp.textContent = a.name; b.append(sp);
+      b.addEventListener('click', () => { navPkg = a.id; try { H().launchApp(a.id); } catch (e) {} });
+      box.append(b);
+    });
+    let c = {}; try { c = JSON.parse(H().getSetup()); } catch (e) {}
+    $('nav-note').textContent = c.notif ? 'Turn-by-turn from your navigation app shows here while you drive.' : 'Allow Now playing and navigation info in Setup to show turns here.';
+  }
+  $('nav-turn').addEventListener('click', () => { if (NATIVE && navPkg) { try { H().launchApp(navPkg); } catch (e) {} } });
   function stat(id, ok) { const e = $(id); e.textContent = ok ? 'On' : 'Allow'; e.className = 'st ' + (ok ? 'ok' : 'no'); }
   function renderSetup() {
     if (!NATIVE) return;
     let c; try { c = JSON.parse(H().getSetup()); } catch (e) { return; }
+    micOk = !!c.mic; stat('s-notif', c.notif); stat('s-mic', c.mic);
     stat('s-overlay', c.overlay); stat('s-write', c.write); stat('s-battery', c.battery); stat('s-bt', c.btPerm);
     $('s-auto').textContent = c.auto ? 'On' : 'Off'; $('s-auto').className = 'st ' + (c.auto ? 'ok' : '');
     $('s-delay').textContent = c.delay + ' s';
@@ -1072,7 +1173,7 @@
   });
   $('setup-close').addEventListener('click', () => $('setup').classList.remove('open'));
   $('setup').addEventListener('click', e => { if (e.target === $('setup')) $('setup').classList.remove('open'); });
-  [['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
+  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
     $(id).addEventListener('click', () => { if (NATIVE) H().openSetup(k); }));
   $('p-auto').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setAuto(!c.auto); renderSetup(); });
   $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });
@@ -1083,6 +1184,12 @@
   // Called by the app
   window.hub.autoStatus = msg => { $('autoline').textContent = msg; toast(msg); };
   window.hub.setAwake = on => { wantAwake = !!on; lockScreen(); };
+  if (NATIVE) {
+    try { micOk = !!JSON.parse(H().getSetup()).mic; } catch (e) {}
+    loadNavApps();
+    try { hub.setNow(JSON.parse(H().getNow())); hub.setNav(JSON.parse(H().getNav())); } catch (e) {}
+    window.addEventListener('focus', () => { loadNavApps(); try { micOk = !!JSON.parse(H().getSetup()).mic; } catch (e) {} });
+  }
   if (NATIVE) { $('link-text').textContent = 'Mazda Hub app'; $('link-chip').classList.remove('mock'); loadNativeApps(); renderSource(); }
 
   // Fit the fixed 1280x800 landscape layout to whatever screen or frame this opens in
@@ -1093,7 +1200,7 @@
   window.addEventListener('resize', fitStage);
   fitStage();
 
-  loadTrack(0);
+  if (!NATIVE) loadTrack(0);
 </script>
 
 </body>

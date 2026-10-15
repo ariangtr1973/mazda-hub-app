@@ -117,6 +117,26 @@ object Ops {
         "data:image/png;base64," + Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP)
     } catch (e: Exception) { "" }
 
+    /** Installed apps that can navigate (Google Maps, Waze, ...). */
+    fun navApps(c: Context): JSONArray {
+        val pm = c.packageManager
+        val probes = listOf(
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("google.navigation:q=Rochester")),
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=Rochester")),
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("waze://?q=Rochester"))
+        )
+        val seen = HashSet<String>()
+        val out = ArrayList<JSONObject>()
+        for (pr in probes) for (ri in pm.queryIntentActivities(pr, 0)) {
+            val pkg = ri.activityInfo.packageName
+            if (pkg == c.packageName || !seen.add(pkg)) continue
+            if (pm.getLaunchIntentForPackage(pkg) == null) continue
+            out.add(JSONObject().put("id", pkg).put("name", ri.loadLabel(pm).toString()).put("icon", iconData(ri.loadIcon(pm))))
+        }
+        out.sortBy { when (it.getString("id")) { "com.google.android.apps.maps" -> 0; "com.waze" -> 1; else -> 2 } }
+        return JSONArray(out)
+    }
+
     fun launchApp(c: Context, pkg: String): Boolean {
         val i = c.packageManager.getLaunchIntentForPackage(pkg) ?: return false
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
