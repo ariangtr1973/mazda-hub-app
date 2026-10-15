@@ -167,6 +167,22 @@
     background: var(--accent-faint); font-size: 0.9rem; letter-spacing: 0.14em; text-transform: uppercase; }
   .addsongs:active { background: var(--accent-dim); }
   .addsongs svg { width: 22px; height: 22px; stroke: var(--ink); fill: none; stroke-width: 1.8; stroke-linecap: round; }
+
+  /* Lite mode: lighter effects for low-end tablets */
+  html.lite .glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-lite, rgba(8,16,30,0.62)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 6px 18px rgba(0,0,0,0.4); }
+  html.lite .picker .glass { background: rgba(8,16,30,0.94); }
+  html.lite .picker { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(2,4,10,0.82); }
+  .app .mono img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+  .app .mono.has-img { background: none; border: none; box-shadow: none; }
+  .srow { display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 0 18px; border-radius: 16px; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.05); }
+  .srow .st { margin-left: auto; font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  .srow .st.ok { color: var(--accent); }
+  .srow .st.no { color: var(--warn); }
+  .setgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; overflow-y: auto; align-content: start; }
+  .setcol { display: flex; flex-direction: column; gap: 10px; }
+  .setlab { font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); margin: 4px 4px 0; }
+  .srow.sel { border-color: var(--accent); background: var(--accent-faint); }
+  .autoline { font-size: 0.85rem; letter-spacing: 0.08em; color: var(--ink-dim); padding: 0 4px; min-height: 1.2em; }
   .apps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; overflow-y: auto; }
   .app { position: relative; min-height: 132px; padding: 14px 10px; border-radius: 18px; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.05);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; transition: transform 0.1s, background 0.15s, border-color 0.15s; }
@@ -291,6 +307,7 @@
     <div class="foot">
       <button class="chip" id="awake-btn" aria-pressed="true"><i></i><span id="awake-text">Screen: stays on</span></button>
       <button class="chip" id="skin-btn" aria-label="Change color theme"><i></i><span id="skin-name">Theme: Blue</span></button>
+      <button class="chip" id="setup-btn" aria-haspopup="dialog"><i></i><span>Setup</span></button>
       <span class="chip mock" id="link-chip"><i></i><span id="link-text">Mock mode</span></span>
     </div>
   </section>
@@ -331,11 +348,44 @@
           <div class="sheet-title">Choose music app</div>
           <div class="sheet-sub">The one you pick becomes the default player</div>
         </div>
+        <button class="addsongs" id="all-apps" hidden>Show all apps</button>
         <button class="addsongs" id="add-songs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add songs</button>
         <input type="file" id="file-pick" accept="audio/*" multiple hidden>
         <button class="sheet-close" id="picker-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="apps" id="apps"></div>
+    </div>
+  </div>
+
+  <div class="picker" id="setup" role="dialog" aria-modal="true" aria-label="Setup">
+    <div class="glass sheet">
+      <div class="sheet-head">
+        <div>
+          <div class="sheet-title">Setup</div>
+          <div class="sheet-sub">One-time permissions and your car's Bluetooth</div>
+        </div>
+        <button class="sheet-close" id="setup-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="setgrid">
+        <div class="setcol" id="perm-col">
+          <div class="setlab">Permissions</div>
+          <button class="srow" id="p-overlay"><span>Display over other apps</span><span class="st" id="s-overlay"></span></button>
+          <button class="srow" id="p-write"><span>Change screen timeout</span><span class="st" id="s-write"></span></button>
+          <button class="srow" id="p-battery"><span>Run in background</span><span class="st" id="s-battery"></span></button>
+          <button class="srow" id="p-bt"><span>Bluetooth access</span><span class="st" id="s-bt"></span></button>
+          <button class="srow" id="p-home"><span>Make Mazda Hub the home app</span><span class="st">Open</span></button>
+        </div>
+        <div class="setcol">
+          <div class="setlab">Car Bluetooth</div>
+          <div class="setcol" id="car-list"></div>
+          <div class="setlab">Auto start</div>
+          <button class="srow" id="p-auto"><span>Start music when car connects</span><span class="st" id="s-auto"></span></button>
+          <button class="srow" id="p-delay"><span>Wait before play</span><span class="st ok" id="s-delay"></span></button>
+          <button class="srow" id="p-lite"><span>Lite mode (faster on older tablets)</span><span class="st" id="s-lite"></span></button>
+          <button class="srow" id="p-test"><span>Test auto start now</span><span class="st">Run</span></button>
+          <div class="autoline" id="autoline"></div>
+        </div>
+      </div>
     </div>
   </div>
 </main>
@@ -395,9 +445,14 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
   }
+  const NATIVE = typeof window.HubNative !== 'undefined' && typeof window.HubNative.getApps === 'function';
   function trigger(name) {
     const a = CONFIG.actions[name];
     if (!a) return;
+    if (NATIVE && (name === 'play' || name === 'next' || name === 'prev')) {
+      try { window.HubNative.mediaKey(name === 'play' ? 'toggle' : name); } catch (e) {}
+      toast(a.label); return;
+    }
     if (CONFIG.mode === 'mock') { toast(a.label + ' (mock)'); return; }
     toast(a.label);
     if (a.target) { fetch(a.target, { mode: 'no-cors' }).catch(() => {}); }
@@ -604,7 +659,10 @@
     ctx.shadowBlur = 0;
   }
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let lastF = 0;
   function frame(t) {
+    if (isLite() && t - lastF < 33) { requestAnimationFrame(frame); return; }
+    lastF = t;
     if (localActive && analyser) {
       analyser.getByteFrequencyData(fbuf);
       if (!feedArr) feedArr = new Float32Array(NB);
@@ -669,7 +727,7 @@
     // hub.setMediaApps([{ id:'ytm', name:'YouTube Music', status:'ok' }, ...])
     setMediaApps(list) {
       if (!Array.isArray(list)) return;
-      CONFIG.sources = list.map((a, i) => ({ id: a.id, name: a.name, short: a.short || a.name.slice(0, 2).toUpperCase(), hue: a.hue == null ? (i * 47) % 360 : a.hue, target: a.target || '', link: a.link || '' }));
+      CONFIG.sources = list.map((a, i) => ({ id: a.id, name: a.name, short: a.short || a.name.slice(0, 2).toUpperCase(), hue: a.hue == null ? (i * 47) % 360 : a.hue, target: a.target || '', link: a.link || '', icon: a.icon || '' }));
       list.forEach(a => { status[a.id] = a.status || 'ok'; });
       if (!CONFIG.sources.some(x => x.id === sourceId)) sourceId = CONFIG.sources[0].id;
       renderSource();
@@ -862,11 +920,13 @@
   try { const sv = localStorage.getItem('hub-source'); if (sv && sv !== 'local' && CONFIG.sources.some(x => x.id === sv)) sourceId = sv; } catch (e) {}
   const srcById = id => CONFIG.sources.find(x => x.id === id) || CONFIG.sources[0];
 
+  $('open-app').addEventListener('click', e => { if (NATIVE && sourceId !== 'local') { e.preventDefault(); try { window.HubNative.launchApp(sourceId); } catch (x) {} } });
   function renderSource() {
     const cur = srcById(sourceId);
     $('np-src-name').textContent = 'Now playing \u00b7 ' + cur.name;
     const oa = $('open-app');
-    if (cur.link) { oa.href = cur.link; oa.hidden = false; } else { oa.hidden = true; }
+    if (NATIVE && cur.id !== 'local') { oa.href = '#'; oa.hidden = false; }
+    else if (cur.link) { oa.href = cur.link; oa.hidden = false; } else { oa.hidden = true; }
   }
   function renderApps() {
     const box = $('apps');
@@ -877,7 +937,8 @@
       b.className = 'app' + (src.id === sourceId ? ' sel' : '') + (st && st !== 'ok' ? ' warn' : '');
       b.style.setProperty('--ah', src.hue);
       b.setAttribute('aria-pressed', src.id === sourceId ? 'true' : 'false');
-      const mono = document.createElement('div'); mono.className = 'mono'; mono.textContent = src.short;
+      const mono = document.createElement('div'); mono.className = 'mono';
+      if (src.icon) { mono.classList.add('has-img'); const im = document.createElement('img'); im.src = src.icon; im.alt = ''; mono.append(im); } else mono.textContent = src.short;
       const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = src.name;
       b.append(mono, nm);
       const label = src.id === sourceId ? 'Default' : st === 'signin' ? 'Sign in' : st === 'error' ? 'Error' : '';
@@ -886,15 +947,34 @@
       box.append(b);
     });
   }
-  function openPicker() { renderApps(); $('picker').classList.add('open'); }
+  let showAll = false;
+  function loadNativeApps() {
+    if (!NATIVE) return;
+    try {
+      const list = JSON.parse(window.HubNative.getApps(showAll));
+      const cfg = JSON.parse(window.HubNative.getSetup());
+      const saved = cfg.music;
+      const apps = list.map(a => ({ id: a.id, name: a.name, icon: a.icon, hue: hashHue(a.id) }));
+      apps.push({ id: 'local', name: 'This tablet (test)', short: 'ON', hue: 95 });
+      if (saved && apps.some(a => a.id === saved)) sourceId = saved;
+      else if (!apps.some(a => a.id === sourceId)) sourceId = (apps[0] || {}).id || 'local';
+      window.hub.setMediaApps(apps);
+      $('all-apps').hidden = false;
+      $('all-apps').textContent = showAll ? 'Music apps only' : 'Show all apps';
+    } catch (e) {}
+  }
+  $('all-apps').addEventListener('click', () => { showAll = !showAll; loadNativeApps(); });
+  function openPicker() { loadNativeApps(); renderApps(); $('picker').classList.add('open'); }
   function closePicker() { $('picker').classList.remove('open'); }
   function chooseSource(id) {
     sourceId = id;
     try { localStorage.setItem('hub-source', id); } catch (e) {}
     const src = srcById(id);
     renderSource(); renderApps();
+    if (NATIVE && id !== 'local') { try { window.HubNative.setMusic(id); } catch (e) {} }
     if (id === 'local') startLocal(); else stopLocal();
     if (id === 'local') toast('Playing from this tablet');
+    else if (NATIVE) toast('Default player: ' + src.name);
     else if (CONFIG.mode === 'mock') toast('Default player: ' + src.name + ' (mock)');
     else { toast('Default player: ' + src.name); if (src.target) { fetch(src.target, { mode: 'no-cors' }).catch(() => {}); } }
     setTimeout(closePicker, 350);
@@ -935,6 +1015,59 @@
   document.addEventListener('visibilitychange', lockScreen);
   if (!nativeAwake) document.addEventListener('pointerdown', lockScreen);
   lockScreen();
+
+
+  // ---------------------------------------------------------------
+  // Setup panel (standalone app only): permissions, car Bluetooth, auto start, lite mode
+  // ---------------------------------------------------------------
+  const H = () => window.HubNative;
+  function liteOn(on) { document.documentElement.classList.toggle('lite', on); }
+  let liteChoice = null;
+  try { liteChoice = localStorage.getItem('hub-lite'); } catch (e) {}
+  if (liteChoice === '1') liteOn(true);
+  if (NATIVE) {
+    try { if (liteChoice === null && JSON.parse(H().getSetup()).lowRam) { liteOn(true); } } catch (e) {}
+  }
+  const isLite = () => document.documentElement.classList.contains('lite');
+  function stat(id, ok) { const e = $(id); e.textContent = ok ? 'On' : 'Allow'; e.className = 'st ' + (ok ? 'ok' : 'no'); }
+  function renderSetup() {
+    if (!NATIVE) return;
+    let c; try { c = JSON.parse(H().getSetup()); } catch (e) { return; }
+    stat('s-overlay', c.overlay); stat('s-write', c.write); stat('s-battery', c.battery); stat('s-bt', c.btPerm);
+    $('s-auto').textContent = c.auto ? 'On' : 'Off'; $('s-auto').className = 'st ' + (c.auto ? 'ok' : '');
+    $('s-delay').textContent = c.delay + ' s';
+    $('s-lite').textContent = isLite() ? 'On' : 'Off'; $('s-lite').className = 'st ' + (isLite() ? 'ok' : '');
+    const box = $('car-list'); box.innerHTML = '';
+    let devs = []; try { devs = JSON.parse(H().getBtDevices()); } catch (e) {}
+    if (!devs.length) { const d = document.createElement('div'); d.className = 'autoline'; d.textContent = c.btPerm ? 'No paired Bluetooth devices. Pair the car in Android settings first.' : 'Allow Bluetooth access to see paired devices.'; box.append(d); }
+    devs.forEach(d => {
+      const b = document.createElement('button'); b.className = 'srow' + (d.addr === c.carAddr ? ' sel' : '');
+      const n = document.createElement('span'); n.textContent = d.name;
+      const t = document.createElement('span'); t.className = 'st' + (d.addr === c.carAddr ? ' ok' : ''); t.textContent = d.addr === c.carAddr ? 'My car' : 'Select';
+      b.append(n, t);
+      b.addEventListener('click', () => { H().setCar(d.addr, d.name); renderSetup(); });
+      box.append(b);
+    });
+  }
+  function openSetup() { renderSetup(); $('setup').classList.add('open'); }
+  $('setup-btn').addEventListener('click', () => {
+    if (!NATIVE) { toast('Setup is available in the Mazda Hub app'); return; }
+    openSetup();
+  });
+  $('setup-close').addEventListener('click', () => $('setup').classList.remove('open'));
+  $('setup').addEventListener('click', e => { if (e.target === $('setup')) $('setup').classList.remove('open'); });
+  [['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
+    $(id).addEventListener('click', () => { if (NATIVE) H().openSetup(k); }));
+  $('p-auto').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setAuto(!c.auto); renderSetup(); });
+  $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });
+  $('p-lite').addEventListener('click', () => { const on = !isLite(); liteOn(on); try { localStorage.setItem('hub-lite', on ? '1' : '0'); } catch (e) {} renderSetup(); });
+  $('p-test').addEventListener('click', () => { H().testAuto(); $('setup').classList.remove('open'); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('setup').classList.contains('open')) renderSetup(); });
+  window.addEventListener('focus', () => { if ($('setup').classList.contains('open')) renderSetup(); });
+  // Called by the app
+  window.hub.autoStatus = msg => { $('autoline').textContent = msg; toast(msg); };
+  window.hub.setAwake = on => { wantAwake = !!on; lockScreen(); };
+  if (NATIVE) { $('link-text').textContent = 'Mazda Hub app'; $('link-chip').classList.remove('mock'); loadNativeApps(); renderSource(); }
 
   // Fit the fixed 1280x800 landscape layout to whatever screen or frame this opens in
   function fitStage() {
