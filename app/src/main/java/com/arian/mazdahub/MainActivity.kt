@@ -453,6 +453,7 @@ class MainActivity : Activity() {
                         "write" -> startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, pkg))
                         "battery" -> startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
                         "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        "pip" -> startActivity(Intent("android.settings.PICTURE_IN_PICTURE_SETTINGS"))
                         "loc" -> requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQ_LOC)
                         "mic" -> requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
                         "bt" -> if (Build.VERSION.SDK_INT >= 31) requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQ_BT)

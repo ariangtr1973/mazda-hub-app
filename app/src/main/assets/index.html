@@ -239,6 +239,16 @@
   .mapstat { position: absolute; right: 80px; bottom: 12px; z-index: 3; font-size: 0.72rem; letter-spacing: 0.1em; color: var(--ink-soft); background: rgba(6,10,16,0.8); padding: 6px 10px; border-radius: 999px; }
   .mapattr { position: absolute; left: 10px; top: auto; bottom: 74px; z-index: 2; font-size: 0.55rem; color: rgba(255,255,255,0.5); display: none; }
   .navapps { display: flex; flex-wrap: wrap; gap: 12px; }
+
+  .navreal { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 14px; justify-content: flex-start; }
+  .navturn { width: 100%; text-align: left; min-height: 110px; }
+  .navturn .turn-dist { font-size: clamp(1.6rem, 2.8cqw, 2.6rem); }
+  .navturn svg { width: 64px; height: 64px; }
+  .navapps { gap: 14px; }
+  .navapp { min-height: 84px; padding: 0 26px 0 16px; font-size: 1.15rem; border-radius: 20px; }
+  .navapp img { width: 56px; height: 56px; border-radius: 14px; }
+  .navtip { font-size: 0.82rem; letter-spacing: 0.06em; color: var(--ink-dim); line-height: 1.5; padding: 0 4px; }
+  .navtip b { color: var(--ink); font-weight: 600; }
   /* Lite mode: lighter effects for low-end tablets */
   html.lite .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
   html.lite .picker .glass { background: rgba(8,16,30,0.94); }
@@ -322,22 +332,16 @@
       <div class="stack" id="stack">
         <div class="pane" role="tabpanel" aria-labelledby="tab-0">
           <div class="navreal" id="nav-real" hidden>
-            <div class="mapbox" id="map">
-              <div class="map-tiles" id="map-tiles"></div>
-              <div class="map-acc" id="map-acc"></div>
-              <div class="map-me" id="map-me"><svg viewBox="0 0 40 40" id="map-arrow"><path d="M20 4 L31 34 L20 28 L9 34 Z"/></svg><i id="map-dot"></i></div>
-              <button class="turn navturn" id="nav-turn" aria-label="Open navigation app">
-                <svg viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6"/></svg>
-                <div>
-                  <div class="turn-dist" id="nav-t1">Not navigating</div>
-                  <div class="turn-road" id="nav-t2">Tap an app below to start a trip</div>
-                </div>
-              </button>
-              <div class="navapps" id="nav-apps"></div>
-              <div class="mapzoom"><button id="map-zin" aria-label="Zoom in">+</button><button id="map-zout" aria-label="Zoom out">&minus;</button></div>
-              <div class="mapstat" id="map-stat">Waiting for location&hellip;</div>
-              <div class="mapattr">&copy; OpenStreetMap &copy; CARTO</div>
-            </div>
+            <button class="turn navturn" id="nav-turn" aria-label="Open navigation app">
+              <svg viewBox="0 0 24 24"><path d="M12 20V6M6 12l6-6 6 6"/></svg>
+              <div>
+                <div class="turn-dist" id="nav-t1">Not navigating</div>
+                <div class="turn-road" id="nav-t2">Start a trip below</div>
+              </div>
+            </button>
+            <div class="setlab">Start navigation</div>
+            <div class="navapps" id="nav-apps"></div>
+            <div class="navtip" id="nav-tip">Start a trip, then press <b>Home</b>. The navigation app shrinks into a small window in the corner and the hub stays in front. Drag the window to move it.</div>
           </div>
           <div id="nav-mock">
           <div class="turn">
@@ -464,7 +468,8 @@
           <button class="srow" id="p-write"><span>Change screen timeout</span><span class="st" id="s-write"></span></button>
           <button class="srow" id="p-battery"><span>Run in background</span><span class="st" id="s-battery"></span></button>
           <button class="srow" id="p-notif"><span>Now playing and navigation info</span><span class="st" id="s-notif"></span></button>
-          <button class="srow" id="p-loc"><span>Location (for the map)</span><span class="st" id="s-loc"></span></button>
+          <button class="srow" id="p-loc"><span>Location (for weather)</span><span class="st" id="s-loc"></span></button>
+          <button class="srow" id="p-pip"><span>Navigation in a corner window</span><span class="st">Open</span></button>
           <button class="srow" id="p-mic"><span>Live visualizer (no recording)</span><span class="st" id="s-mic"></span></button>
           <button class="srow" id="p-bt"><span>Bluetooth access</span><span class="st" id="s-bt"></span></button>
           <button class="srow" id="p-home"><span>Make Mazda Hub the home app</span><span class="st">Open</span></button>
@@ -1185,7 +1190,7 @@
     if (!NATIVE) return;
     const has = o && o.has;
     $('nav-t1').textContent = has ? (o.title || 'Navigating') : 'Not navigating';
-    $('nav-t2').textContent = has ? ([o.text, o.sub].filter(Boolean).join(' \u00b7 ')) : 'Tap an app below to start a trip';
+    $('nav-t2').textContent = has ? ([o.text, o.sub].filter(Boolean).join(' \u00b7 ')) : 'Start a trip below';
     navPkg = has ? o.pkg : navPkg;
     micOk = micOk;
   }
@@ -1235,7 +1240,7 @@
   });
   $('setup-close').addEventListener('click', () => $('setup').classList.remove('open'));
   $('setup').addEventListener('click', e => { if (e.target === $('setup')) $('setup').classList.remove('open'); });
-  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-loc', 'loc'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
+  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-loc', 'loc'], ['p-pip', 'pip'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
     $(id).addEventListener('click', () => { if (NATIVE) H().openSetup(k); }));
   $('p-auto').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setAuto(!c.auto); renderSetup(); });
   $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });
@@ -1257,64 +1262,13 @@
 
 
   // ---------------------------------------------------------------
-  // In-hub map: dark street tiles centered on the live location. Turn text comes from the navigation app.
+  // Location (only used to pick the weather spot)
   // ---------------------------------------------------------------
-  const TM = (() => {
-    const el = $('map'), layer = $('map-tiles'), me = $('map-me'), accEl = $('map-acc'), arrow = $('map-arrow'), dot = $('map-dot');
-    let z = 16, lat = 43.1566, lon = -77.6088, bearing = -1, accM = 0, tiles = new Map(), got = false;
-    const subs = ['a', 'b', 'c', 'd'];
-    try { const sz = parseInt(localStorage.getItem('hub-zoom'), 10); if (sz >= 11 && sz <= 19) z = sz; } catch (e) {}
-    const proj = (la, lo, zz) => {
-      const sc = 256 * Math.pow(2, zz), sn = Math.sin(la * Math.PI / 180);
-      return [(lo + 180) / 360 * sc, (0.5 - Math.log((1 + sn) / (1 - sn)) / (4 * Math.PI)) * sc];
-    };
-    function render() {
-      const w = el.clientWidth, h = el.clientHeight;
-      if (!w || !h) return;
-      const [cx, cy] = proj(lat, lon, z), n = Math.pow(2, z), keep = new Set();
-      const x0 = Math.floor((cx - w / 2) / 256), x1 = Math.floor((cx + w / 2) / 256);
-      const y0 = Math.floor((cy - h / 2) / 256), y1 = Math.floor((cy + h / 2) / 256);
-      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
-        if (ty < 0 || ty >= n) continue;
-        const wx = ((tx % n) + n) % n, key = z + '/' + wx + '/' + ty + '/' + tx;
-        keep.add(key);
-        let im = tiles.get(key);
-        if (!im) {
-          im = new Image(); im.className = 'tile'; im.alt = ''; im.draggable = false; im.style.visibility = 'hidden';
-          im.onload = () => { im.style.visibility = 'visible'; };
-          im.src = 'https://' + subs[(wx + ty) % 4] + '.basemaps.cartocdn.com/dark_all/' + z + '/' + wx + '/' + ty + '@2x.png';
-          layer.appendChild(im); tiles.set(key, im);
-        }
-        im.style.transform = 'translate(' + Math.round(tx * 256 - cx + w / 2) + 'px,' + Math.round(ty * 256 - cy + h / 2) + 'px)';
-      }
-      tiles.forEach((im, k) => { if (!keep.has(k)) { im.remove(); tiles.delete(k); } });
-      me.style.transform = 'translate(' + (w / 2) + 'px,' + (h / 2) + 'px)';
-      const r = accM / (156543.03 * Math.cos(lat * Math.PI / 180) / n);
-      if (got && r > 14) {
-        accEl.style.display = 'block'; accEl.style.width = accEl.style.height = Math.min(r * 2, 900) + 'px';
-        accEl.style.transform = 'translate(' + (w / 2 - Math.min(r, 450)) + 'px,' + (h / 2 - Math.min(r, 450)) + 'px)';
-      } else accEl.style.display = 'none';
-      arrow.style.display = bearing >= 0 ? 'block' : 'none';
-      dot.style.display = bearing >= 0 ? 'none' : 'block';
-      arrow.style.transform = 'rotate(' + Math.max(0, bearing) + 'deg)';
-    }
-    if (window.ResizeObserver) new ResizeObserver(render).observe(el);
-    return {
-      set(o) { lat = o.lat; lon = o.lon; accM = o.acc || 0; if (o.bearing >= 0 && o.speed > 1.2) bearing = o.bearing; else if (!(o.speed > 1.2)) bearing = bearing; got = true; render(); },
-      zoom(d) { z = Math.max(11, Math.min(19, z + d)); try { localStorage.setItem('hub-zoom', String(z)); } catch (e) {} render(); },
-      render, has: () => got, pos: () => [lat, lon]
-    };
-  })();
-  $('map-zin').addEventListener('click', e => { e.stopPropagation(); TM.zoom(1); });
-  $('map-zout').addEventListener('click', e => { e.stopPropagation(); TM.zoom(-1); });
-  let locFirst = true;
+  let locLat = 43.1566, locLon = -77.6088, haveLoc = false, locFirst = true;
   window.hub.setLoc = o => {
-    TM.set(o);
-    const acc = Math.round(o.acc || 0);
-    $('map-stat').textContent = (o.prov === 'gps' ? 'GPS' : 'Network location') + (acc ? ' \u00b1' + acc + ' m' : '') + (o.speed > 0.5 ? ' \u00b7 ' + Math.round(o.speed * 2.237) + ' mph' : '');
+    locLat = o.lat; locLon = o.lon; haveLoc = true;
     if (locFirst) { locFirst = false; loadWx(); }
   };
-  TM.render();
 
   // ---------------------------------------------------------------
   // Live weather (Open-Meteo, no account needed). Falls back to the sample card if offline.
@@ -1324,7 +1278,7 @@
     82: 'Heavy showers', 85: 'Snow showers', 86: 'Snow showers', 95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm' };
   async function loadWx() {
     try {
-      const have = TM.has(), la = TM.pos()[0], lo = TM.pos()[1];
+      const have = haveLoc, la = locLat, lo = locLon;
       const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + la.toFixed(3) + '&longitude=' + lo.toFixed(3) +
         '&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation_probability' +
         '&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=2&timezone=auto';
