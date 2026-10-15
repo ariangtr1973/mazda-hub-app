@@ -1185,11 +1185,23 @@
   function renderNav(o) {
     if (!NATIVE) return;
     const has = o && o.has;
-    $('nav-t1').textContent = has ? (o.title || 'Navigating') : 'Not navigating';
-    $('nav-t2').textContent = has ? ([o.text, o.sub].filter(Boolean).join(' \u00b7 ')) : 'Tap an app below to start a trip';
+    let big = 'Not navigating', small = 'Start a trip below';
+    if (has) {
+      const parts = [o.title, o.text, o.sub].filter(x => x && x !== 'Navigating').join(' \u00b7 ').split(/\s*[\u00b7|]\s*/).filter(Boolean);
+      const dur = parts.find(x => /^\d+\s*(h|hr|min|mins)\b/i.test(x) || /\d+\s*h\s*\d+\s*min/i.test(x));
+      const dist = parts.find(x => /^\d+(\.\d+)?\s*(mi|km|ft|m)\b/i.test(x));
+      const eta = parts.find(x => /\b(AM|PM)\b|ETA/i.test(x));
+      const rest = parts.filter(x => x !== dur && x !== dist && x !== eta);
+      if (dur || dist) {
+        big = [dur, dist].filter(Boolean).join(' \u00b7 ');
+        small = [rest.join(' \u00b7 '), eta ? (/ETA/i.test(eta) ? eta : 'ETA ' + eta) : ''].filter(Boolean).join(' \u00b7 ');
+      } else { big = parts[0] || 'Navigating'; small = parts.slice(1).join(' \u00b7 '); }
+    }
+    $('nav-t1').textContent = big;
+    $('nav-t2').textContent = small;
     navPkg = has ? o.pkg : navPkg;
     const was = navigating; navigating = !!has;
-    if (navigating && !was) showPane(0, true);
+    if (navigating && !was) { showPane(0, true); TM.zoomTo(15); }
     micOk = micOk;
   }
   let navPkg = '', navigating = false;
@@ -1265,7 +1277,7 @@
   // ---------------------------------------------------------------
   const TM = (() => {
     const el = $('map'), layer = $('map-tiles'), me = $('map-me'), accEl = $('map-acc'), arrow = $('map-arrow'), dot = $('map-dot');
-    let z = 16, lat = 43.1566, lon = -77.6088, bearing = -1, accM = 0, tiles = new Map(), got = false;
+    let z = 15, lat = 43.1566, lon = -77.6088, bearing = -1, accM = 0, tiles = new Map(), got = false;
     const subs = ['a', 'b', 'c', 'd'];
     try { const sz = parseInt(localStorage.getItem('hub-zoom'), 10); if (sz >= 11 && sz <= 19) z = sz; } catch (e) {}
     const proj = (la, lo, zz) => {
@@ -1305,6 +1317,7 @@
     if (window.ResizeObserver) new ResizeObserver(render).observe(el);
     return {
       set(o) { lat = o.lat; lon = o.lon; accM = o.acc || 0; if (o.bearing >= 0 && o.speed > 1.2) bearing = o.bearing; else if (!(o.speed > 1.2)) bearing = bearing; got = true; render(); },
+      zoomTo(v) { if (z < v) { z = v; try { localStorage.setItem('hub-zoom', String(z)); } catch (e) {} render(); } },
       zoom(d) { z = Math.max(11, Math.min(19, z + d)); try { localStorage.setItem('hub-zoom', String(z)); } catch (e) {} render(); },
       render, has: () => got, pos: () => [lat, lon]
     };
