@@ -1,6 +1,11 @@
 package com.arian.mazdahub
 
+import android.app.Notification
 import android.content.ComponentName
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.TextView
 import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
@@ -113,34 +118,73 @@ class NowPlayingService : NotificationListenerService() {
     // ---- navigation notification (turn, distance, ETA) ----
     private val navPkgs = setOf("com.google.android.apps.maps", "com.waze", "com.here.app.maps", "net.osmand", "net.osmand.plus", "app.organicmaps", "com.mapswithme.maps.pro")
 
+    private fun isNavNotif(sbn: StatusBarNotification): Boolean =
+        sbn.packageName in navPkgs && (sbn.isOngoing || sbn.notification.category == Notification.CATEGORY_NAVIGATION)
+
     private fun scanNav() {
         var found: StatusBarNotification? = null
-        try { found = activeNotifications?.firstOrNull { it.packageName in navPkgs && it.isOngoing } } catch (e: Exception) { }
+        try { found = activeNotifications?.firstOrNull { isNavNotif(it) } } catch (e: Exception) { }
         navFrom(found)
+    }
+
+    private fun collect(v: View, out: MutableList<String>) {
+        if (v is TextView) { val t = v.text?.toString()?.trim(); if (!t.isNullOrEmpty()) out.add(t) }
+        if (v is ViewGroup) for (i in 0 until v.childCount) collect(v.getChildAt(i), out)
+    }
+
+    /** Navigation apps often draw their notification with a custom layout; read the text out of it. */
+    @Suppress("DEPRECATION")
+    private fun remoteTexts(n: Notification): List<String> {
+        val out = ArrayList<String>()
+        for (rv in listOfNotNull(n.bigContentView, n.contentView)) {
+            try { collect(rv.apply(applicationContext, FrameLayout(this)), out) } catch (e: Exception) { }
+            if (out.isNotEmpty()) break
+        }
+        return out.distinct()
     }
 
     private fun navFrom(sbn: StatusBarNotification?) {
         val o = JSONObject()
         if (sbn == null) o.put("has", false)
         else {
-            val ex = sbn.notification.extras
+            val n = sbn.notification
+            val ex = n.extras
+            var title = (ex.getCharSequence("android.title") ?: "").toString()
+            var text = (ex.getCharSequence("android.text") ?: "").toString()
+            val sub = (ex.getCharSequence("android.subText") ?: "").toString()
+            if (title.isBlank() || text.isBlank()) {
+                val rt = remoteTexts(n)
+                if (title.isBlank() && rt.isNotEmpty()) title = rt[0]
+                if (text.isBlank() && rt.size > 1) text = rt.drop(1).take(3).joinToString(" \u00b7 ")
+            }
+            if (title.isBlank()) title = "Navigating"
             o.put("has", true)
             o.put("pkg", sbn.packageName)
-            o.put("title", (ex.getCharSequence("android.title") ?: "").toString())
-            o.put("text", (ex.getCharSequence("android.text") ?: "").toString())
-            o.put("sub", (ex.getCharSequence("android.subText") ?: "").toString())
+            o.put("title", title)
+            o.put("text", text)
+            o.put("sub", sub)
         }
         lastNav = o.toString()
         MainActivity.live?.pushJs("hub.setNav(" + lastNav + ")")
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) { if (sbn.packageName in navPkgs && sbn.isOngoing) navFrom(sbn) }
+    private fun note(sbn: StatusBarNotification) {
+        val n = sbn.notification
+        val line = sbn.packageName.substringAfterLast('.') + " ongoing=" + sbn.isOngoing + " cat=" + n.category +
+            " title=" + (n.extras.getCharSequence("android.title") ?: "") + " rv=" + (n.bigContentView != null || n.contentView != null)
+        dbg = (listOf(line) + dbg).take(4)
+    }
+
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (sbn.packageName in navPkgs) { note(sbn); if (isNavNotif(sbn)) navFrom(sbn) }
+    }
     override fun onNotificationRemoved(sbn: StatusBarNotification) { if (sbn.packageName in navPkgs) scanNav() }
 
     companion object {
         @Volatile var inst: NowPlayingService? = null
         @Volatile var controller: MediaController? = null
         @Volatile var lastNow: String = "{\"has\":false}"
+        @Volatile var dbg: List<String> = emptyList()
         @Volatile var lastNav: String = "{\"has\":false}"
     }
 }

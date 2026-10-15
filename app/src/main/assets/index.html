@@ -465,6 +465,7 @@
           <button class="srow" id="p-battery"><span>Run in background</span><span class="st" id="s-battery"></span></button>
           <button class="srow" id="p-notif"><span>Now playing and navigation info</span><span class="st" id="s-notif"></span></button>
           <button class="srow" id="p-loc"><span>Location (map and weather)</span><span class="st" id="s-loc"></span></button>
+          <button class="srow" id="p-pip"><span>Stop Maps shrinking when you press Home</span><span class="st">Open</span></button>
           <button class="srow" id="p-mic"><span>Live visualizer (no recording)</span><span class="st" id="s-mic"></span></button>
           <button class="srow" id="p-bt"><span>Bluetooth access</span><span class="st" id="s-bt"></span></button>
           <button class="srow" id="p-home"><span>Make Mazda Hub the home app</span><span class="st">Open</span></button>
@@ -1212,6 +1213,7 @@
   function renderSetup() {
     if (!NATIVE) return;
     let c; try { c = JSON.parse(H().getSetup()); } catch (e) { return; }
+    try { $('autoline').textContent = 'Navigation info: ' + H().getNavDebug(); } catch (e) {}
     micOk = !!c.mic; stat('s-notif', c.notif); stat('s-mic', c.mic); stat('s-loc', c.loc);
     stat('s-overlay', c.overlay); stat('s-write', c.write); stat('s-battery', c.battery); stat('s-bt', c.btPerm);
     $('s-auto').textContent = c.auto ? 'On' : 'Off'; $('s-auto').className = 'st ' + (c.auto ? 'ok' : '');
@@ -1237,7 +1239,7 @@
   });
   $('setup-close').addEventListener('click', () => $('setup').classList.remove('open'));
   $('setup').addEventListener('click', e => { if (e.target === $('setup')) $('setup').classList.remove('open'); });
-  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-loc', 'loc'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
+  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-loc', 'loc'], ['p-pip', 'pip'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home']].forEach(([id, k]) =>
     $(id).addEventListener('click', () => { if (NATIVE) H().openSetup(k); }));
   $('p-auto').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setAuto(!c.auto); renderSetup(); });
   $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });

@@ -11,8 +11,8 @@ android {
         applicationId 'com.arian.mazdahub'
         minSdk 26
         targetSdk 34
-        versionCode 7
-        versionName '0.7'
+        versionCode 8
+        versionName '0.8'
     }
 
     // A fixed key so a newer build installs over the older one without uninstalling first.
