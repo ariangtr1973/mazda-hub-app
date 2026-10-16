@@ -102,9 +102,51 @@ class NowPlayingService : NotificationListenerService() {
                 artB64 = ""; lastArtKey = key
             }
             o.put("art", artB64)
+            val ri = ratingInfo(c, m, st)
+            o.put("liked", ri.liked ?: JSONObject.NULL)
+            o.put("canLike", ri.canLike); o.put("canDislike", ri.canDislike)
         }
         lastNow = o.toString()
         MainActivity.live?.pushJs("hub.setNow(" + lastNow + ")")
+    }
+
+    class RateInfo(val liked: Int?, val canLike: Boolean, val canDislike: Boolean)
+
+    private fun iconName(pkg: String, id: Int): String = try {
+        if (id == 0) "" else createPackageContext(pkg, 0).resources.getResourceEntryName(id)
+    } catch (e: Exception) { "" }
+
+    private val upWords = listOf("thumb_up", "thumbs_up", "thumbup", "thumbsup", "like", "love", "heart", "favorite", "favourite")
+    private val downWords = listOf("thumb_down", "thumbs_down", "thumbdown", "thumbsdown", "dislike")
+    private val onWords = listOf("unlike", "undislike", "remove", "undo", "filled", "selected", "active", "checked", "_on", "_fill", "liked", "added", "saved")
+
+    /** Works out whether the current song is liked / disliked in the music app, from its rating or its thumbs actions. */
+    private fun ratingInfo(c: MediaController, m: MediaMetadata?, st: PlaybackState?): RateInfo {
+        var liked: Int? = null
+        var canUp = false; var canDown = false
+        val dbg = ArrayList<String>()
+        try {
+            val r = m?.getRating(MediaMetadata.METADATA_KEY_USER_RATING)
+            if (r != null) {
+                dbg.add("rating style=" + r.ratingStyle + " rated=" + r.isRated)
+                if (r.ratingStyle == android.media.Rating.RATING_THUMB_UP_DOWN) { canUp = true; canDown = true; liked = if (!r.isRated) 0 else if (r.isThumbUp) 1 else -1 }
+                else if (r.ratingStyle == android.media.Rating.RATING_HEART) { canUp = true; liked = if (r.hasHeart()) 1 else 0 }
+            }
+        } catch (e: Exception) { }
+        var upOn = false; var downOn = false
+        st?.customActions?.forEach { a ->
+            val ic = iconName(c.packageName, a.icon)
+            val k = (a.action + " " + a.name + " " + ic).lowercase()
+            dbg.add(a.action + "/" + a.name + "/" + ic)
+            val isDown = downWords.any { k.contains(it) }
+            val isUp = !isDown && upWords.any { k.contains(it) }
+            val on = onWords.any { k.contains(it) }
+            if (isUp) { canUp = true; if (on) upOn = true }
+            if (isDown) { canDown = true; if (on) downOn = true }
+        }
+        if (liked == null && (canUp || canDown)) liked = if (upOn) 1 else if (downOn) -1 else 0
+        rateDbg = dbg.joinToString(" ; ")
+        return RateInfo(liked, canUp, canDown)
     }
 
     private fun encode(b: Bitmap): String = try {
@@ -191,5 +233,6 @@ class NowPlayingService : NotificationListenerService() {
         @Volatile var dbg: List<String> = emptyList()
         @Volatile var seen: List<String> = emptyList()
         @Volatile var lastNav: String = "{\"has\":false}"
+        @Volatile var rateDbg: String = ""
     }
 }

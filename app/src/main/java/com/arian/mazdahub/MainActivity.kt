@@ -65,6 +65,7 @@ class MainActivity : Activity() {
         web = WebView(this)
         web.setBackgroundColor(Color.BLACK)
         setContentView(web)
+        goImmersive()
 
         with(web.settings) {
             javaScriptEnabled = true
@@ -367,6 +368,31 @@ class MainActivity : Activity() {
         } catch (e: Exception) { null }
     }
 
+    /** Hide the status and navigation bars so the hub uses the whole screen (swipe from an edge to bring them back). */
+    private fun goImmersive() {
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                window.setDecorFitsSystemWindows(false)
+                window.insetsController?.let {
+                    it.hide(android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars())
+                    it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = (android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+            }
+        } catch (e: Exception) { }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) goImmersive()
+    }
+
+    private fun audio() = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+
     // ---- Navigation helpers: allowlisted web requests, voice input, spoken guidance ----
     private val netPool = java.util.concurrent.Executors.newFixedThreadPool(2)
     private var tts: android.speech.tts.TextToSpeech? = null
@@ -474,6 +500,36 @@ class MainActivity : Activity() {
     inner class Bridge {
         @JavascriptInterface fun http(id: Int, url: String) { httpGet(id, url) }
 
+        /** Media volume as 0..100 */
+        @JavascriptInterface fun getVolume(): Int = try {
+            val a = audio(); val mx = a.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+            if (mx <= 0) 0 else Math.round(a.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) * 100f / mx)
+        } catch (e: Exception) { 0 }
+
+        @JavascriptInterface fun setVolume(pct: Int): Int {
+            try {
+                val a = audio(); val mx = a.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                a.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, Math.round(pct.coerceIn(0, 100) * mx / 100f), 0)
+            } catch (e: Exception) { }
+            return getVolume()
+        }
+
+        @JavascriptInterface fun stepVolume(dir: Int): Int {
+            try {
+                audio().adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC,
+                    if (dir > 0) android.media.AudioManager.ADJUST_RAISE else android.media.AudioManager.ADJUST_LOWER, 0)
+            } catch (e: Exception) { }
+            return getVolume()
+        }
+
+        @JavascriptInterface fun toggleMute(): Boolean = try {
+            val a = audio(); val m = a.isStreamMute(android.media.AudioManager.STREAM_MUSIC)
+            a.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, if (m) android.media.AudioManager.ADJUST_UNMUTE else android.media.AudioManager.ADJUST_MUTE, 0)
+            !m
+        } catch (e: Exception) { false }
+
+        @JavascriptInterface fun isMuted(): Boolean = try { audio().isStreamMute(android.media.AudioManager.STREAM_MUSIC) } catch (e: Exception) { false }
+
         @JavascriptInterface fun listen(): Boolean {
             return try {
                 val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -527,14 +583,28 @@ class MainActivity : Activity() {
             c.transportControls.seekTo(ms); return true
         }
 
-        /** Best effort: some apps expose thumbs up / down as custom actions. */
+        /** Thumbs up / down: uses the app's rating if it has one, otherwise its thumbs custom actions. */
         @JavascriptInterface fun rate(kind: String): Boolean {
             val c = NowPlayingService.controller ?: return false
+            try {
+                val r = c.metadata?.getRating(android.media.MediaMetadata.METADATA_KEY_USER_RATING)
+                if (r != null && r.ratingStyle == android.media.Rating.RATING_THUMB_UP_DOWN) {
+                    val up = kind == "like"
+                    val cur = if (!r.isRated) 0 else if (r.isThumbUp) 1 else -1
+                    val next = if (up && cur == 1 || !up && cur == -1) android.media.Rating.newUnratedRating(android.media.Rating.RATING_THUMB_UP_DOWN) else android.media.Rating.newThumbRating(up)
+                    c.transportControls.setRating(next); return true
+                }
+            } catch (e: Exception) { }
             val acts = c.playbackState?.customActions ?: return false
-            val want = if (kind == "like") listOf("thumbs_up", "thumbsup", "like", "love", "heart", "favorite") else listOf("thumbs_down", "thumbsdown", "dislike")
-            val hit = acts.firstOrNull { a -> val k = (a.action + " " + a.name).lowercase(); want.any { k.contains(it) } && (kind == "dislike" || !k.contains("dislike")) } ?: return false
+            val want = if (kind == "like") listOf("thumb_up", "thumbs_up", "thumbup", "thumbsup", "like", "love", "heart", "favorite", "favourite") else listOf("thumb_down", "thumbs_down", "thumbdown", "thumbsdown", "dislike")
+            val hit = acts.firstOrNull { a ->
+                val ic = try { createPackageContext(c.packageName, 0).resources.getResourceEntryName(a.icon) } catch (e: Exception) { "" }
+                val k = (a.action + " " + a.name + " " + ic).lowercase()
+                want.any { k.contains(it) } && (kind == "dislike" || !k.contains("dislike"))
+            } ?: return false
             c.transportControls.sendCustomAction(hit, null); return true
         }
+        @JavascriptInterface fun getRateDebug(): String = NowPlayingService.rateDbg
 
         @JavascriptInterface fun getNow(): String = NowPlayingService.lastNow
         @JavascriptInterface fun getNav(): String = NowPlayingService.lastNav
