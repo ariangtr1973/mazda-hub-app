@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Mazda Hub</string>
+    <string name="mix_desc">Lets the Start mix button in Mazda Hub press Start mix inside your music app. It only acts when you tap that button.</string>
 </resources>

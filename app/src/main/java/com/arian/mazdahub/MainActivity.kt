@@ -704,21 +704,24 @@ class MainActivity : Activity() {
             } ?: return false
             c.transportControls.sendCustomAction(hit, null); return true
         }
-        /** Queue a song mix: when the current song ends (or is skipped) the app starts a mix based on it. */
+        /** Start a mix: the accessibility helper opens the player menu in the music app and taps "Start mix". */
         @JavascriptInterface fun startMix(artist: String, title: String): String {
             val c = NowPlayingService.controller ?: return "none"
-            val id = trackId(c)
-            if (id.isEmpty() && artist.isBlank() && title.isBlank()) return "none"
-            armMix(id, artist, title, c.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE) ?: title)
-            return if (c.packageName.contains("youtube")) "queued" else "queued-search"
+            val svc = MixService.inst
+            if (svc == null) { openSetup("a11y"); return "needs-access" }
+            val pkg = c.packageName
+            Ops.launchApp(this@MainActivity, pkg)
+            svc.begin(pkg)
+            return "started"
         }
-        @JavascriptInterface fun mixNow(artist: String, title: String): String = this@MainActivity.mixNow(artist, title)
-        @JavascriptInterface fun cancelMix() { mixing = false; pushMix(false) }
-        @JavascriptInterface fun mixPending(): Boolean = mixing
+        @JavascriptInterface fun mixNow(artist: String, title: String): String = startMix(artist, title)
+        @JavascriptInterface fun cancelMix() { }
+        @JavascriptInterface fun mixPending(): Boolean = false
+        @JavascriptInterface fun getMixStatus(): String = (if (MixService.inst == null) "helper off" else "helper on") + ": " + MixService.status
         @JavascriptInterface fun getTrackDebug(): String {
             val c = NowPlayingService.controller ?: return "no player"
             val m = c.metadata
-            return c.packageName + " id=" + (m?.getString(android.media.MediaMetadata.METADATA_KEY_MEDIA_ID) ?: "-") + " uri=" + (m?.getString(android.media.MediaMetadata.METADATA_KEY_MEDIA_URI) ?: "-") + " video=" + trackId(c).ifEmpty { "none" } + " | mix: " + mixLog
+            return c.packageName + " id=" + (m?.getString(android.media.MediaMetadata.METADATA_KEY_MEDIA_ID) ?: "-") + " uri=" + (m?.getString(android.media.MediaMetadata.METADATA_KEY_MEDIA_URI) ?: "-") + " video=" + trackId(c).ifEmpty { "none" } + " | mix: " + MixService.status
         }
 
         @JavascriptInterface fun getRateDebug(): String = NowPlayingService.rateDbg
@@ -746,6 +749,7 @@ class MainActivity : Activity() {
             o.put("write", Settings.System.canWrite(c))
             o.put("battery", pm.isIgnoringBatteryOptimizations(c.packageName))
             o.put("notif", NowPlayingService.inst != null || android.provider.Settings.Secure.getString(c.contentResolver, "enabled_notification_listeners")?.contains(c.packageName) == true)
+            o.put("a11y", MixService.inst != null)
             o.put("loc", checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
             o.put("gps", packageManager.hasSystemFeature(PackageManager.FEATURE_LOCATION_GPS))
             o.put("mic", checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
@@ -770,6 +774,7 @@ class MainActivity : Activity() {
                         "write" -> startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, pkg))
                         "battery" -> startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
                         "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        "a11y" -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                         "pip" -> startActivity(Intent("android.settings.PICTURE_IN_PICTURE_SETTINGS"))
                         "loc" -> requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQ_LOC)
                         "mic" -> requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)

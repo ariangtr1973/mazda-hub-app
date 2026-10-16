@@ -51,6 +51,11 @@
             </intent-filter>
         </activity>
 
+        <service android:name=".MixService" android:exported="true" android:label="Mazda Hub Start mix"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/mix_service" />
+        </service>
         <service android:name=".NowPlayingService" android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
