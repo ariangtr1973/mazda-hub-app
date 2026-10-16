@@ -236,6 +236,44 @@
   .mapzoom { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: flex; flex-direction: column; gap: 8px; }
   .mapzoom button { width: 60px; height: 60px; border-radius: 16px; border: 1px solid var(--glass-edge); background: rgba(6,10,16,0.84); font-size: 2rem; line-height: 1; color: var(--ink); }
   .mapzoom button:active { background: var(--accent-dim); }
+
+  /* ---- In-hub navigation ---- */
+  .map-route { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .map-route path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  #map-route-bg { stroke: rgba(0,0,0,0.65); stroke-width: 11; }
+  #map-route-fg { stroke: var(--accent); stroke-width: 6.5; filter: drop-shadow(0 0 6px var(--accent-glow)); }
+  .map-dest { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+  .map-dest::after { content: ""; position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; border-radius: 50%; background: #ff4d5e; border: 4px solid #fff; box-shadow: 0 0 14px rgba(255,77,94,0.8); }
+  .mapbox .mapstat { top: 92px; bottom: auto; right: 10px; }
+  .gn { position: absolute; left: 10px; right: 10px; top: 10px; z-index: 4; display: flex; align-items: center; gap: 18px; padding: 10px 18px; border-radius: 16px; border: 1px solid var(--accent); background: rgba(6,10,16,0.9); box-shadow: 0 0 18px var(--accent-glow); }
+  .turn[hidden], .gn[hidden], .gbar[hidden], .gidle[hidden], .sheet[hidden], .map-dest[hidden] { display: none; }
+  .gn svg { width: 64px; height: 64px; flex: none; stroke: var(--accent); fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 6px var(--accent-glow)); }
+  .gn-d { font-size: 2.3rem; font-weight: 300; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .gn-i { font-size: 1.15rem; font-weight: 300; color: var(--ink-soft); letter-spacing: 0.03em; margin-top: 2px; }
+  .gbar { position: absolute; left: 10px; right: 84px; bottom: 10px; z-index: 4; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 18px; border-radius: 16px; border: 1px solid var(--glass-edge); background: rgba(6,10,16,0.9); }
+  .gbar-s { flex: 1; min-width: 0; }
+  .gbar-s b { display: block; font-size: 1.5rem; font-weight: 400; }
+  .gbar-s span { font-size: 0.9rem; color: var(--ink-soft); letter-spacing: 0.06em; }
+  .gbar button, .gidle button, .shb { min-height: 64px; min-width: 96px; padding: 0 20px; border-radius: 16px; border: 1px solid var(--glass-edge); background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04)); color: var(--ink); font-size: 1.1rem; letter-spacing: 0.06em; }
+  .gbar button:active, .gidle button:active, .shb:active { background: var(--accent-dim); }
+  .gbar button.end { background: linear-gradient(180deg, #d93a4a, #8f1e2b); border-color: #ff7a88; font-weight: 600; }
+  .gidle { position: absolute; left: 10px; right: 84px; bottom: 10px; z-index: 4; display: flex; gap: 10px; }
+  .gidle .gwhere { flex: 1; text-align: left; font-size: 1.35rem; background: rgba(6,10,16,0.9); border-color: var(--accent); }
+  .gidle .gq { background-color: rgba(6,10,16,0.9); }
+  .sheet { position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; gap: 10px; padding: 12px; background: #05080d; overflow: hidden; }
+  .sh-top { display: flex; gap: 10px; }
+  .sh-top input { flex: 1; min-width: 0; height: 64px; padding: 0 18px; border-radius: 16px; border: 1px solid var(--accent); background: rgba(255,255,255,0.06); color: var(--ink); font-size: 1.3rem; }
+  .sh-top input:disabled { opacity: 0.45; }
+  .shb.mic { border-color: var(--accent); }
+  .sh-msg { min-height: 1.3em; font-size: 0.95rem; color: var(--ink-soft); letter-spacing: 0.04em; }
+  .sh-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .sh-row { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 18px; border-radius: 14px; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.05); text-align: left; color: var(--ink); width: 100%; }
+  .sh-row:active { background: var(--accent-dim); }
+  .sh-row b { font-weight: 500; font-size: 1.1rem; display: block; }
+  .sh-row small { color: var(--ink-soft); font-size: 0.85rem; display: block; }
+  .sh-row .setb { margin-left: auto; font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); padding: 14px 8px; }
+  .sh-foot { display: flex; align-items: center; gap: 14px; color: var(--ink-dim); font-size: 0.85rem; }
+  .sheet .navapps { position: static; }
   .mapstat { position: absolute; right: 80px; bottom: 12px; z-index: 3; font-size: 0.72rem; letter-spacing: 0.1em; color: var(--ink-soft); background: rgba(6,10,16,0.8); padding: 6px 10px; border-radius: 999px; }
   .mapattr { position: absolute; right: 80px; bottom: 44px; z-index: 2; font-size: 0.6rem; color: rgba(255,255,255,0.6); background: rgba(6,10,16,0.6); padding: 3px 8px; border-radius: 999px; }
   .navapps { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -324,6 +362,8 @@
           <div class="navreal" id="nav-real" hidden>
             <div class="mapbox" id="map">
               <div class="map-tiles" id="map-tiles"></div>
+              <svg class="map-route" id="map-route"><path id="map-route-bg"/><path id="map-route-fg"/></svg>
+              <div class="map-dest" id="map-dest" hidden></div>
               <div class="map-acc" id="map-acc"></div>
               <div class="map-me" id="map-me"><svg viewBox="0 0 40 40" id="map-arrow"><path d="M20 4 L31 34 L20 28 L9 34 Z"/></svg><i id="map-dot"></i></div>
               <button class="turn navturn" id="nav-turn" aria-label="Open navigation app">
@@ -333,7 +373,29 @@
                   <div class="turn-road" id="nav-t2">Tap an app below to start a trip</div>
                 </div>
               </button>
-              <div class="navapps" id="nav-apps"></div>
+              <div class="gn" id="gn" hidden>
+                <svg viewBox="0 0 48 48" id="gn-ic"></svg>
+                <div class="gn-t"><div class="gn-d" id="gn-d"></div><div class="gn-i" id="gn-i"></div></div>
+              </div>
+              <div class="gbar" id="gbar" hidden>
+                <div class="gbar-s"><b id="gb-1"></b><span id="gb-2"></span></div>
+                <button id="gb-mute">Mute</button><button id="gb-end" class="end">End</button>
+              </div>
+              <div class="gidle" id="gidle">
+                <button class="gwhere" id="g-where">Where to?</button>
+                <button class="gq" id="g-home">Home</button><button class="gq" id="g-work">Work</button>
+              </div>
+              <div class="sheet" id="sheet" hidden>
+                <div class="sh-top">
+                  <input id="sh-in" type="text" placeholder="Address or place" autocomplete="off" enterkeyhint="search">
+                  <button id="sh-go" class="shb">Search</button>
+                  <button id="sh-mic" class="shb mic">Speak</button>
+                  <button id="sh-x" class="shb">Close</button>
+                </div>
+                <div class="sh-msg" id="sh-msg"></div>
+                <div class="sh-list" id="sh-list"></div>
+                <div class="sh-foot"><span>Or use another app:</span><div class="navapps" id="nav-apps"></div></div>
+              </div>
               <div class="mapzoom"><button id="map-zin" aria-label="Zoom in">+</button><button id="map-zout" aria-label="Zoom out">&minus;</button></div>
               <div class="mapstat" id="map-stat">Waiting for location&hellip;</div>
               <div class="mapattr">&copy; OpenStreetMap contributors</div>
@@ -488,6 +550,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script src="nav.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 <script>
   // ---------------------------------------------------------------
@@ -1200,11 +1263,11 @@
     $('nav-t1').textContent = big;
     $('nav-t2').textContent = small;
     navPkg = has ? o.pkg : navPkg;
-    const was = navigating; navigating = !!has;
+    const was = navigating; navigating = !!has || ownNav;
     if (navigating && !was) { showPane(0, true); TM.zoomTo(15); }
     micOk = micOk;
   }
-  let navPkg = '', navigating = false;
+  let navPkg = '', navigating = false, ownNav = false;
   function loadNavApps() {
     if (!NATIVE) return;
     $('nav-mock').hidden = true; $('nav-real').hidden = false;
@@ -1278,6 +1341,8 @@
   const TM = (() => {
     const el = $('map'), layer = $('map-tiles'), me = $('map-me'), accEl = $('map-acc'), arrow = $('map-arrow'), dot = $('map-dot');
     let z = 15, lat = 43.1566, lon = -77.6088, bearing = -1, accM = 0, tiles = new Map(), got = false;
+    let route = null, rpx = null, rpz = -1, dest = null;
+    const rbg = $('map-route-bg'), rfg = $('map-route-fg'), destEl = $('map-dest');
     const subs = ['a', 'b', 'c', 'd'];
     try { const sz = parseInt(localStorage.getItem('hub-zoom'), 10); if (sz >= 11 && sz <= 19) z = sz; } catch (e) {}
     const proj = (la, lo, zz) => {
@@ -1310,6 +1375,17 @@
         accEl.style.display = 'block'; accEl.style.width = accEl.style.height = Math.min(r * 2, 900) + 'px';
         accEl.style.transform = 'translate(' + (w / 2 - Math.min(r, 450)) + 'px,' + (h / 2 - Math.min(r, 450)) + 'px)';
       } else accEl.style.display = 'none';
+      if (route) {
+        if (rpz !== z) { rpx = route.map(q => proj(q[0], q[1], z)); rpz = z; }
+        let d = '', lx = -1e9, ly = -1e9;
+        for (let i = 0; i < rpx.length; i++) {
+          const x = rpx[i][0] - cx + w / 2, y = rpx[i][1] - cy + h / 2;
+          if (i > 0 && i < rpx.length - 1 && Math.abs(x - lx) + Math.abs(y - ly) < 3) continue;
+          d += (d ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); lx = x; ly = y;
+        }
+        rbg.setAttribute('d', d); rfg.setAttribute('d', d);
+      } else { rbg.setAttribute('d', ''); rfg.setAttribute('d', ''); }
+      if (dest) { const dp = proj(dest[0], dest[1], z); destEl.hidden = false; destEl.style.transform = 'translate(' + (dp[0] - cx + w / 2) + 'px,' + (dp[1] - cy + h / 2) + 'px)'; } else destEl.hidden = true;
       arrow.style.display = bearing >= 0 ? 'block' : 'none';
       dot.style.display = bearing >= 0 ? 'none' : 'block';
       arrow.style.transform = 'rotate(' + Math.max(0, bearing) + 'deg)';
@@ -1319,6 +1395,8 @@
       set(o) { lat = o.lat; lon = o.lon; accM = o.acc || 0; if (o.bearing >= 0 && o.speed > 1.2) bearing = o.bearing; else if (!(o.speed > 1.2)) bearing = bearing; got = true; render(); },
       zoomTo(v) { if (z < v) { z = v; try { localStorage.setItem('hub-zoom', String(z)); } catch (e) {} render(); } },
       zoom(d) { z = Math.max(11, Math.min(19, z + d)); try { localStorage.setItem('hub-zoom', String(z)); } catch (e) {} render(); },
+      setRoute(pts, d) { route = pts; rpx = null; rpz = -1; dest = d || null; render(); },
+      setZ(v) { z = Math.max(11, Math.min(19, v)); render(); },
       render, has: () => got, pos: () => [lat, lon]
     };
   })();
@@ -1328,6 +1406,7 @@
   try { hasGpsHw = !!JSON.parse(window.HubNative.getSetup()).gps; } catch (e) {}
   window.hub.setLoc = o => {
     TM.set(o);
+    try { NAVG.onLoc(o); } catch (e) { }
     const acc = Math.round(o.acc || 0);
     if (o.prov === 'gps') gpsAtMs = Date.now();
     const searching = o.prov !== 'gps' && hasGpsHw && Date.now() - gpsAtMs > 20000;
@@ -1370,6 +1449,185 @@
     } catch (e) { /* offline: keep what is shown */ }
   }
   loadWx(); setInterval(loadWx, 15 * 60 * 1000);
+
+
+  // ---------------------------------------------------------------
+  // In-hub navigation: search, route (OSRM), turn banner, spoken guidance, rerouting.
+  // ---------------------------------------------------------------
+  const NAVG = (() => {
+    const calls = new Map(); let seq = 0;
+    window.hub.httpDone = (id, st, body) => { const f = calls.get(id); if (f) { calls.delete(id); f(st, body); } };
+    function get(url) {
+      return new Promise(res => {
+        if (NATIVE) {
+          const id = ++seq; const t = setTimeout(() => { calls.delete(id); res({ st: 0, body: '' }); }, 25000);
+          calls.set(id, (st, body) => { clearTimeout(t); res({ st, body }); });
+          try { H().http(id, url); } catch (e) { calls.delete(id); clearTimeout(t); res({ st: 0, body: '' }); }
+        } else fetch(url).then(r => r.text().then(b => res({ st: r.status, body: b }))).catch(() => res({ st: 0, body: '' }));
+      });
+    }
+    const say = t => { if (NATIVE && t) { try { H().speak(t); } catch (e) { } } };
+    const KEY = 'hub-places';
+    let places = { home: null, work: null, recents: [] };
+    try { const j = JSON.parse(localStorage.getItem(KEY) || 'null'); if (j) places = Object.assign(places, j); } catch (e) { }
+    const savePlaces = () => { try { localStorage.setItem(KEY, JSON.stringify(places)); } catch (e) { } };
+
+    let route = null, trk = null, dest = null, muted = false, rerouting = false, lastRe = 0, speed = 0, assign = null, lastRes = null;
+    const sheet = $('sheet'), inp = $('sh-in'), msg = $('sh-msg'), list = $('sh-list');
+
+    // ---------- icons ----------
+    function setIcon(ic) {
+      const svg = $('gn-ic');
+      if (ic.kind === 'arrive') svg.innerHTML = '<path d="M24 43S11 31 11 21a13 13 0 0 1 26 0c0 10-13 22-13 22z"/><circle cx="24" cy="21" r="4.5"/>';
+      else if (ic.kind === 'round') svg.innerHTML = '<circle cx="24" cy="32" r="8"/><g transform="rotate(' + ic.rot + ' 24 24)"><path d="M24 22V6M16 14l8-8 8 8"/></g>';
+      else svg.innerHTML = '<g transform="rotate(' + ic.rot + ' 24 24)"><path d="M24 42V8M12 20L24 8l12 12"/></g>';
+    }
+    function clock(sec) {
+      const d = new Date(Date.now() + sec * 1000);
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    // ---------- UI state ----------
+    function ui() {
+      const on = !!route;
+      $('gn').hidden = !on; $('gbar').hidden = !on; $('gidle').hidden = on;
+      $('nav-turn').hidden = on;
+      $('gb-mute').textContent = muted ? 'Unmute' : 'Mute';
+      const hm = places.home, wk = places.work;
+      $('g-home').textContent = 'Home'; $('g-work').textContent = 'Work';
+      $('g-home').style.opacity = hm ? 1 : 0.6; $('g-work').style.opacity = wk ? 1 : 0.6;
+    }
+    function banner(r) {
+      const nx = r.next || r.cur;
+      setIcon(Nav.icon(nx));
+      $('gn-d').textContent = Nav.fmtDist(r.next ? r.distToNext : r.remaining);
+      $('gn-i').textContent = Nav.instruction(nx);
+      $('gb-1').textContent = Nav.fmtDur(r.remDur) + ' · ' + Nav.fmtDist(r.remaining);
+      $('gb-2').textContent = 'ETA ' + clock(r.remDur) + (dest && dest.name ? ' · ' + dest.name : '');
+    }
+
+    // ---------- routing ----------
+    async function fetchRoute(from, to) {
+      const u = 'https://router.project-osrm.org/route/v1/driving/' + from[1].toFixed(6) + ',' + from[0].toFixed(6) + ';' + to[1].toFixed(6) + ',' + to[0].toFixed(6) +
+        '?steps=true&geometries=geojson&overview=full&alternatives=false';
+      const r = await get(u);
+      if (r.st !== 200) return null;
+      try { const j = JSON.parse(r.body); return j.code === 'Ok' ? Nav.buildRoute(j) : null; } catch (e) { return null; }
+    }
+    async function start(d) {
+      if (!TM.has()) { toast('Waiting for your location…'); msg.textContent = 'Waiting for your location. Try again in a moment.'; return; }
+      msg.textContent = 'Finding the route…';
+      const rt = await fetchRoute(TM.pos(), [d.lat, d.lon]);
+      if (!rt) { msg.textContent = 'Could not get a route. Check the hotspot connection and try again.'; return; }
+      dest = d; route = rt; trk = new Nav.Tracker(rt); ownNav = true; navigating = true;
+      addRecent(d);
+      closeSheet();
+      TM.setRoute(rt.pts, [d.lat, d.lon]); TM.setZ(16); showPane(0, true);
+      const r0 = trk.update(TM.pos()[0], TM.pos()[1], 0, 0); r0.say = null; ui(); banner(r0);
+      say('Starting route to ' + (d.name || 'your destination') + '. ' + Nav.fmtDur(rt.dur) + ', ' + Nav.sayDist(rt.total) + '.');
+    }
+    function stop(spoken) {
+      route = null; trk = null; dest = null; ownNav = false; navigating = false; rerouting = false;
+      TM.setRoute(null); ui();
+      if (NATIVE) { try { H().stopSpeak(); } catch (e) { } }
+      if (spoken) say(spoken);
+    }
+    async function reroute() {
+      if (rerouting || !dest || Date.now() - lastRe < 15000) return;
+      rerouting = true; lastRe = Date.now();
+      say('Rerouting.'); $('gn-i').textContent = 'Rerouting…';
+      const rt = await fetchRoute(TM.pos(), [dest.lat, dest.lon]);
+      rerouting = false;
+      if (!rt || !route) return;
+      route = rt; trk = new Nav.Tracker(rt); TM.setRoute(rt.pts, [dest.lat, dest.lon]);
+    }
+    function onLoc(o) {
+      speed = o.speed || 0;
+      if (!route || !trk) return;
+      if ((o.acc || 0) > 150) return;
+      const r = trk.update(o.lat, o.lon, o.acc || 0, o.speed || 0);
+      if (r.arrived) { banner(r); stop('You have arrived at ' + (dest && dest.name ? dest.name : 'your destination')); toast('Arrived'); return; }
+      if (r.offRoute) { reroute(); return; }
+      if (!rerouting) banner(r);
+      if (r.say) say(r.say);
+    }
+
+    // ---------- search ----------
+    function addRecent(d) {
+      places.recents = [d].concat(places.recents.filter(x => Math.abs(x.lat - d.lat) > 0.0005 || Math.abs(x.lon - d.lon) > 0.0005)).slice(0, 6);
+      savePlaces();
+    }
+    function nameOf(x) {
+      const a = x.display_name.split(',').map(t => t.trim());
+      return { name: x.name || a[0], sub: a.slice(1, 4).join(', ') };
+    }
+    function row(title, sub, onTap, setLabel, onSet) {
+      const b = document.createElement('div'); b.className = 'sh-row'; b.setAttribute('role', 'button'); b.tabIndex = 0;
+      const t = document.createElement('div'); const bt = document.createElement('b'); bt.textContent = title; t.append(bt);
+      if (sub) { const sm = document.createElement('small'); sm.textContent = sub; t.append(sm); }
+      b.append(t);
+      b.addEventListener('click', onTap);
+      if (setLabel) { const sb = document.createElement('span'); sb.className = 'setb'; sb.textContent = setLabel; sb.addEventListener('click', e => { e.stopPropagation(); onSet(); }); b.append(sb); }
+      return b;
+    }
+    function pick(d) {
+      if (assign) { places[assign] = d; savePlaces(); const k = assign; assign = null; msg.textContent = (k === 'home' ? 'Home' : 'Work') + ' saved.'; ui(); showSaved(); return; }
+      start(d);
+    }
+    function showSaved() {
+      list.innerHTML = '';
+      [['home', 'Home'], ['work', 'Work']].forEach(([k, label]) => {
+        const p = places[k];
+        list.append(row(label, p ? p.name : 'Not set', () => { if (p) start(p); else setAssign(k); }, p ? 'Change' : 'Set', () => setAssign(k)));
+      });
+      places.recents.forEach(d => list.append(row(d.name, d.sub || '', () => start(d))));
+    }
+    function setAssign(k) { assign = k; msg.textContent = 'Search for your ' + k + ' address, then tap it to save.'; list.innerHTML = ''; inp.focus(); }
+    async function search(q) {
+      q = (q || '').trim(); if (!q) return;
+      msg.textContent = 'Searching…';
+      const p = TM.pos(), b = 0.6;
+      const u = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=' + encodeURIComponent(q) +
+        '&viewbox=' + [p[1] - b, p[0] + b, p[1] + b, p[0] - b].map(v => v.toFixed(4)).join(',') + '&countrycodes=us';
+      const r = await get(u);
+      list.innerHTML = '';
+      let arr = []; try { arr = JSON.parse(r.body); } catch (e) { }
+      if (r.st !== 200) { msg.textContent = 'Search failed. Check the hotspot connection.'; return; }
+      if (!arr.length) { msg.textContent = 'Nothing found. Try adding the city.'; return; }
+      msg.textContent = assign ? 'Tap the right address to save it as ' + assign + '.' : 'Tap a place to start navigation.';
+      arr.forEach(x => { const n = nameOf(x), d = { name: n.name, sub: n.sub, lat: +x.lat, lon: +x.lon }; list.append(row(n.name, n.sub, () => pick(d))); });
+    }
+    function lockInput() {
+      const driving = speed > 2.2;
+      inp.disabled = driving; $('sh-go').disabled = driving;
+      inp.placeholder = driving ? 'Typing is locked while moving. Use Speak.' : 'Address or place';
+    }
+    function openSheet() { assign = null; sheet.hidden = false; inp.value = ''; msg.textContent = ''; showSaved(); lockInput(); if (!inp.disabled && !NATIVE) inp.focus(); }
+    function closeSheet() { sheet.hidden = true; assign = null; try { inp.blur(); } catch (e) { } }
+
+    $('g-where').addEventListener('click', openSheet);
+    $('sh-x').addEventListener('click', closeSheet);
+    $('sh-go').addEventListener('click', () => search(inp.value));
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') search(inp.value); });
+    $('sh-mic').addEventListener('click', () => {
+      if (!NATIVE) { msg.textContent = 'Voice works in the Mazda Hub app.'; return; }
+      msg.textContent = 'Listening…';
+      let ok = false; try { ok = H().listen(); } catch (e) { }
+      if (!ok) msg.textContent = 'Voice search is not available on this tablet.';
+    });
+    window.hub.voiceResult = t => {
+      if (!t) { msg.textContent = 'Did not catch that. Tap Speak and try again.'; return; }
+      inp.value = t; search(t);
+    };
+    ['home', 'work'].forEach(k => $('g-' + k).addEventListener('click', () => {
+      if (places[k]) start(places[k]); else { openSheet(); setAssign(k); }
+    }));
+    $('gb-end').addEventListener('click', () => stop('Navigation ended'));
+    $('gb-mute').addEventListener('click', () => { muted = !muted; if (NATIVE) { try { H().setMute(muted); } catch (e) { } } ui(); });
+    setInterval(() => { if (!sheet.hidden) lockInput(); }, 1500);
+    ui();
+    return { onLoc, start, stop, search, isOn: () => !!route, _dbg: () => ({ route, trk }) };
+  })();
 
   // Fit the fixed 1280x800 landscape layout to whatever screen or frame this opens in
   function fitStage() {

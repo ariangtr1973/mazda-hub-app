@@ -367,9 +367,81 @@ class MainActivity : Activity() {
         } catch (e: Exception) { null }
     }
 
+    // ---- Navigation helpers: allowlisted web requests, voice input, spoken guidance ----
+    private val netPool = java.util.concurrent.Executors.newFixedThreadPool(2)
+    private var tts: android.speech.tts.TextToSpeech? = null
+    private var ttsReady = false
+    private var ttsMuted = false
+    private var focusReq: android.media.AudioFocusRequest? = null
+
+    private fun allowedHost(u: String): Boolean = try {
+        val x = Uri.parse(u)
+        x.scheme == "https" && (x.host == "nominatim.openstreetmap.org" || x.host == "router.project-osrm.org")
+    } catch (e: Exception) { false }
+
+    private fun httpGet(id: Int, url: String) {
+        if (!allowedHost(url)) { js("window.hub&&hub.httpDone&&hub.httpDone($id,0,'')"); return }
+        netPool.execute {
+            var status = 0; var body = ""
+            try {
+                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.setRequestProperty("User-Agent", "MazdaHub/0.11 (personal Android car dashboard; ariangtr1973@gmail.com)")
+                c.setRequestProperty("Accept-Language", "en")
+                c.connectTimeout = 10000; c.readTimeout = 15000
+                status = c.responseCode
+                val st = if (status in 200..299) c.inputStream else c.errorStream
+                body = st?.bufferedReader()?.use { it.readText() } ?: ""
+                c.disconnect()
+            } catch (e: Exception) { status = 0 }
+            js("window.hub&&hub.httpDone&&hub.httpDone($id,$status," + JSONObject.quote(body) + ")")
+        }
+    }
+
+    private fun ensureTts() {
+        if (tts != null) return
+        tts = android.speech.tts.TextToSpeech(applicationContext) { st ->
+            ttsReady = st == android.speech.tts.TextToSpeech.SUCCESS
+            if (ttsReady) {
+                try {
+                    tts?.language = java.util.Locale.US
+                    tts?.setAudioAttributes(android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                    tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                        override fun onStart(u: String?) {}
+                        override fun onDone(u: String?) { dropFocus() }
+                        @Deprecated("Deprecated in Java") override fun onError(u: String?) { dropFocus() }
+                    })
+                } catch (e: Exception) { }
+            }
+        }
+    }
+
+    private fun takeFocus() {
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            val r = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build()).build()
+            focusReq = r; am.requestAudioFocus(r)
+        } catch (e: Exception) { }
+    }
+
+    private fun dropFocus() {
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            focusReq?.let { am.abandonAudioFocusRequest(it) }; focusReq = null
+        } catch (e: Exception) { }
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode == REQ_FILE) {
+        if (requestCode == REQ_VOICE) {
+            val t = if (resultCode == Activity.RESULT_OK)
+                data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: "" else ""
+            js("window.hub&&hub.voiceResult&&hub.voiceResult(" + JSONObject.quote(t) + ")")
+        } else if (requestCode == REQ_FILE) {
             fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
             fileCallback = null
         } else {
@@ -392,12 +464,39 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         if (live === this) live = null
         clearNet()
+        try { tts?.shutdown() } catch (e: Exception) { }
+        netPool.shutdown()
         web.destroy()
         super.onDestroy()
     }
 
     /** Called from the hub page. */
     inner class Bridge {
+        @JavascriptInterface fun http(id: Int, url: String) { httpGet(id, url) }
+
+        @JavascriptInterface fun listen(): Boolean {
+            return try {
+                val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Where to?")
+                runOnUiThread {
+                    try { @Suppress("DEPRECATION") startActivityForResult(i, REQ_VOICE) }
+                    catch (e: Exception) { js("window.hub&&hub.voiceResult&&hub.voiceResult('')") }
+                }
+                true
+            } catch (e: Exception) { false }
+        }
+
+        @JavascriptInterface fun speak(text: String) {
+            if (ttsMuted) return
+            runOnUiThread {
+                ensureTts()
+                if (ttsReady) { takeFocus(); tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "nav" + System.nanoTime()) }
+            }
+        }
+        @JavascriptInterface fun stopSpeak() { runOnUiThread { try { tts?.stop() } catch (e: Exception) { }; dropFocus() } }
+        @JavascriptInterface fun setMute(m: Boolean) { ttsMuted = m; if (m) stopSpeak() }
+
         @JavascriptInterface
         fun setKeepAwake(on: Boolean) {
             runOnUiThread {
@@ -523,6 +622,7 @@ class MainActivity : Activity() {
         private const val REQ_BT = 1002
         private const val REQ_MIC = 1003
         private const val REQ_LOC = 1004
+        private const val REQ_VOICE = 1005
         @Volatile var live: MainActivity? = null
     }
 }
