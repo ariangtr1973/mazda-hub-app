@@ -555,6 +555,8 @@
   .sw { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 130px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.05); font-size: 1rem; font-weight: 500; letter-spacing: 0.06em; }
   .sw i { width: 62px; height: 62px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, hsl(var(--sh) 100% 78%), hsl(var(--sh) 100% 52%) 55%, hsl(var(--sh) 100% 30%)); box-shadow: 0 0 22px hsl(var(--sh) 100% 55% / 0.65); }
   .sw.sel { border-color: #fff; background: rgba(255,255,255,0.12); } .sw:active { transform: scale(0.96); }
+  .ready { padding: 12px 16px; border-radius: 14px; font-size: 0.95rem; font-weight: 500; line-height: 1.35; border: 1px solid; } .ready.ok { border-color: #3ddc84; background: rgba(61,220,132,0.12); } .ready.warn { border-color: var(--warn); background: rgba(255,181,71,0.12); }
+  #btn-mix.on { border-color: var(--accent); background: hsl(var(--h) 100% 55% / 0.20); box-shadow: 0 0 22px var(--accent-dim); }
   details.diag { margin-top: 6px; } details.diag summary { font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); padding: 10px 4px; min-height: 44px; }
 </style>
 
@@ -804,6 +806,7 @@
         </div>
         <button class="sheet-close" id="setup-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
+      <div class="ready" id="ready"></div>
       <div class="setgrid">
         <div class="setcol" id="perm-col">
           <div class="setlab">Permissions</div>
@@ -912,8 +915,10 @@
     }
     if (NATIVE && name === 'mix') {
       const art = ($('np-artist').textContent || '').trim(), ttl = ($('np-title').textContent || '').trim();
+      let pend = false; try { pend = window.HubNative.mixPending(); } catch (e) { }
+      if (pend) { try { window.HubNative.cancelMix(); } catch (e) { } toast('Mix cancelled'); return; }
       let r = ''; try { r = window.HubNative.startMix(art, ttl); } catch (e) { }
-      toast(r === 'ok' ? 'Starting ' + (art || ttl) + ' mix' : r === 'none' ? 'Play a song first' : 'This music app did not accept the mix request');
+      toast(r === 'queued' ? 'Mix starts when this song ends' : r === 'queued-search' ? 'Radio starts when this song ends' : r === 'none' ? 'Play a song first' : 'Could not queue a mix');
       return;
     }
     if (CONFIG.mode === 'mock') { toast(a.label + ' (mock)'); return; }
@@ -1260,7 +1265,8 @@
       $('np-dur').textContent = dur > 0 ? fmt(dur) : '';
       const sv = CONFIG.sources.find(x => x.id === nowPkg); if (sv) $('np-src-name').textContent = 'Now playing \u00b7 ' + sv.name;
     },
-    setNav(o) { renderNav(o); }
+    setNav(o) { renderNav(o); },
+    mixState(on) { $('btn-mix').classList.toggle('on', !!on); const sp = $('btn-mix').querySelector('span'); if (sp) sp.textContent = on ? 'Mix queued' : 'Start mix'; }
   };
 
   // ---------------------------------------------------------------
@@ -1603,7 +1609,13 @@
   function renderSetup() {
     if (!NATIVE) return;
     let c; try { c = JSON.parse(H().getSetup()); } catch (e) { return; }
-    try { $('autoline').textContent = 'Navigation info: ' + H().getNavDebug() + ' | Thumbs: ' + (H().getRateDebug() || 'none seen'); } catch (e) {}
+    try { $('autoline').textContent = 'Navigation info: ' + H().getNavDebug() + ' | Thumbs: ' + (H().getRateDebug() || 'none seen') + ' | Track: ' + H().getTrackDebug(); } catch (e) {}
+    { const miss = [];
+      if (!c.carAddr) miss.push('choose your car\u2019s Bluetooth'); if (!c.auto) miss.push('turn on \u201cStart music when car connects\u201d');
+      if (!c.overlay) miss.push('allow display over other apps'); if (!c.write) miss.push('allow changing screen timeout'); if (!c.battery) miss.push('allow running in background');
+      if (!c.notif) miss.push('allow now playing access'); if (!c.btPerm) miss.push('allow Bluetooth access'); if (!c.music) miss.push('pick a music app');
+      const r = $('ready'); r.className = 'ready ' + (miss.length ? 'warn' : 'ok');
+      r.textContent = miss.length ? 'Not ready for the car yet. Still to do: ' + miss.join(', ') + '.' : 'Ready. When ' + (c.carName || 'your car') + ' connects, the hub wakes, waits for the hotspot, starts your music and comes back.'; }
     micOk = !!c.mic; stat('s-notif', c.notif); stat('s-mic', c.mic); stat('s-loc', c.loc);
     stat('s-overlay', c.overlay); stat('s-write', c.write); stat('s-battery', c.battery); stat('s-bt', c.btPerm);
     $('s-auto').textContent = c.auto ? 'On' : 'Off'; $('s-auto').className = 'st ' + (c.auto ? 'ok' : '');

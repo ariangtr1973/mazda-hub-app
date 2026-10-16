@@ -368,6 +368,67 @@ class MainActivity : Activity() {
         } catch (e: Exception) { null }
     }
 
+    // ---- Song mix ----
+    @Volatile private var mixing = false
+    private fun pushMix(on: Boolean) { js("window.hub&&hub.mixState&&hub.mixState(" + on + ")") }
+
+    /** The YouTube video id of the playing song, taken from the session's media id or uri. Empty when unknown. */
+    private fun trackId(c: android.media.session.MediaController): String {
+        val m = c.metadata ?: return ""
+        val plain = Regex("^[A-Za-z0-9_-]{11}$")
+        for (x in listOf(m.getString(android.media.MediaMetadata.METADATA_KEY_MEDIA_ID), m.getString(android.media.MediaMetadata.METADATA_KEY_MEDIA_URI))) {
+            if (x.isNullOrBlank()) continue
+            if (plain.matches(x)) return x
+            Regex("[?&]v=([A-Za-z0-9_-]{11})").find(x)?.let { return it.groupValues[1] }
+            Regex("youtu\\.be/([A-Za-z0-9_-]{11})").find(x)?.let { return it.groupValues[1] }
+        }
+        return ""
+    }
+
+    private fun armMix(seedId: String, artist: String, title: String, seedTitle: String) {
+        val c0 = NowPlayingService.controller ?: return
+        val t0 = SystemClock.elapsedRealtime()
+        mixing = true; pushMix(true)
+        val r = object : Runnable {
+            override fun run() {
+                if (!mixing) return
+                val c = NowPlayingService.controller
+                if (c == null || SystemClock.elapsedRealtime() - t0 > 25 * 60_000L) { mixing = false; pushMix(false); return }
+                val st = c.playbackState
+                val dur = c.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+                val playing = st?.state == android.media.session.PlaybackState.STATE_PLAYING
+                var pos = st?.position ?: 0L
+                if (st != null && playing) pos += ((SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
+                val idNow = trackId(c)
+                val titleNow = c.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE) ?: ""
+                val changed = if (seedId.isNotEmpty() && idNow.isNotEmpty()) idNow != seedId else (seedTitle.isNotEmpty() && titleNow.isNotEmpty() && titleNow != seedTitle)
+                val ending = playing && dur > 0 && dur - pos < 2500
+                if (changed || ending) { mixing = false; pushMix(false); fireMix(c, seedId, artist, title); return }
+                main.postDelayed(this, 700)
+            }
+        }
+        main.postDelayed(r, 700)
+    }
+
+    private fun fireMix(c: android.media.session.MediaController, id: String, artist: String, title: String) {
+        val pkg = c.packageName
+        try {
+            if (id.isNotEmpty() && pkg.contains("youtube.music")) {
+                val i = Intent(Intent.ACTION_VIEW, Uri.parse("https://music.youtube.com/watch?v=$id&list=RDAMVM$id")).setPackage(pkg)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                startActivity(i)
+            } else {
+                val q = (if (artist.isNotBlank()) artist else title).trim() + " radio"
+                val focus = Bundle().apply { putString(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*") }
+                if ((c.playbackState?.actions ?: 0L) and android.media.session.PlaybackState.ACTION_PLAY_FROM_SEARCH != 0L) c.transportControls.playFromSearch(q, focus)
+                else startActivity(Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).setPackage(pkg)
+                    .putExtra(android.app.SearchManager.QUERY, q).putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        } catch (e: Exception) { js("window.hub&&hub.autoStatus&&hub.autoStatus('Could not start the mix')") }
+        // bring the hub back after the music app has taken the request
+        main.postDelayed({ try { startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)) } catch (e: Exception) { } }, 3500)
+    }
+
     /** Hide the status and navigation bars so the hub uses the whole screen (swipe from an edge to bring them back). */
     private fun goImmersive() {
         try {
@@ -604,29 +665,20 @@ class MainActivity : Activity() {
             } ?: return false
             c.transportControls.sendCustomAction(hit, null); return true
         }
-        /** Start a radio / mix for the current artist by asking the music app to play "<artist> radio". Returns ok, none or failed. */
+        /** Queue a song mix: when the current song ends (or is skipped) the app starts a mix based on it. */
         @JavascriptInterface fun startMix(artist: String, title: String): String {
             val c = NowPlayingService.controller ?: return "none"
-            val q = (if (artist.isNotBlank()) artist else title).trim()
-            if (q.isEmpty()) return "none"
-            val query = "$q radio"
-            val focus = Bundle().apply { putString(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*") }
-            val actions = c.playbackState?.actions ?: 0L
-            return try {
-                if (actions and android.media.session.PlaybackState.ACTION_PLAY_FROM_SEARCH != 0L) {
-                    c.transportControls.playFromSearch(query, focus); "ok"
-                } else {
-                    val i = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).setPackage(c.packageName)
-                        .putExtra(android.app.SearchManager.QUERY, query)
-                        .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    runOnUiThread {
-                        try { startActivity(i) } catch (e: Exception) { }
-                        Handler(Looper.getMainLooper()).postDelayed({ try { startActivity(Intent(this@MainActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)) } catch (e: Exception) { } }, 3000)
-                    }
-                    "ok"
-                }
-            } catch (e: Exception) { "failed" }
+            val id = trackId(c)
+            if (id.isEmpty() && artist.isBlank() && title.isBlank()) return "none"
+            armMix(id, artist, title, c.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE) ?: title)
+            return if (id.isNotEmpty() && c.packageName.contains("youtube.music")) "queued" else "queued-search"
+        }
+        @JavascriptInterface fun cancelMix() { mixing = false; pushMix(false) }
+        @JavascriptInterface fun mixPending(): Boolean = mixing
+        @JavascriptInterface fun getTrackDebug(): String {
+            val c = NowPlayingService.controller ?: return "no player"
+            val m = c.metadata
+            return c.packageName + " id=" + (m?.getString(android.media.MediaMetadata.METADATA_KEY_MEDIA_ID) ?: "-") + " uri=" + (m?.getString(android.media.MediaMetadata.METADATA_KEY_MEDIA_URI) ?: "-") + " video=" + trackId(c).ifEmpty { "none" }
         }
 
         @JavascriptInterface fun getRateDebug(): String = NowPlayingService.rateDbg
