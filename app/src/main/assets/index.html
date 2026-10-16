@@ -1052,6 +1052,11 @@
   }
   $('btn-like').addEventListener('click', () => rateTap('like'));
   $('btn-dislike').addEventListener('click', () => rateTap('dislike'));
+  { let lp = null, lpDone = false; const mb = $('btn-mix');
+    mb.addEventListener('pointerdown', () => { lpDone = false; lp = setTimeout(() => { lpDone = true;
+      if (NATIVE && !localActive) { const art = ($('np-artist').textContent || '').trim(), ttl = ($('np-title').textContent || '').trim(); let r = ''; try { r = window.HubNative.mixNow(art, ttl); } catch (e) { } toast(r === 'none' ? 'Play a song first' : 'Starting the mix now'); } }, 650); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => mb.addEventListener(ev, () => clearTimeout(lp)));
+    mb.addEventListener('click', e => { if (lpDone) { e.stopImmediatePropagation(); lpDone = false; } }, true); }
   $('btn-mix').addEventListener('click', () => {
     if (localActive) { shuffleLocal(); return; }
     CONFIG.actions.mix.label = 'Mix from ' + $('np-title').textContent;
