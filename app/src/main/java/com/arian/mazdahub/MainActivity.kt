@@ -402,7 +402,7 @@ class MainActivity : Activity() {
 
     private fun allowedHost(u: String): Boolean = try {
         val x = Uri.parse(u)
-        x.scheme == "https" && (x.host == "nominatim.openstreetmap.org" || x.host == "router.project-osrm.org")
+        x.scheme == "https" && (x.host == "nominatim.openstreetmap.org" || x.host == "router.project-osrm.org" || x.host == "api.rainviewer.com")
     } catch (e: Exception) { false }
 
     private fun httpGet(id: Int, url: String) {
@@ -604,6 +604,31 @@ class MainActivity : Activity() {
             } ?: return false
             c.transportControls.sendCustomAction(hit, null); return true
         }
+        /** Start a radio / mix for the current artist by asking the music app to play "<artist> radio". Returns ok, none or failed. */
+        @JavascriptInterface fun startMix(artist: String, title: String): String {
+            val c = NowPlayingService.controller ?: return "none"
+            val q = (if (artist.isNotBlank()) artist else title).trim()
+            if (q.isEmpty()) return "none"
+            val query = "$q radio"
+            val focus = Bundle().apply { putString(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*") }
+            val actions = c.playbackState?.actions ?: 0L
+            return try {
+                if (actions and android.media.session.PlaybackState.ACTION_PLAY_FROM_SEARCH != 0L) {
+                    c.transportControls.playFromSearch(query, focus); "ok"
+                } else {
+                    val i = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).setPackage(c.packageName)
+                        .putExtra(android.app.SearchManager.QUERY, query)
+                        .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runOnUiThread {
+                        try { startActivity(i) } catch (e: Exception) { }
+                        Handler(Looper.getMainLooper()).postDelayed({ try { startActivity(Intent(this@MainActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)) } catch (e: Exception) { } }, 3000)
+                    }
+                    "ok"
+                }
+            } catch (e: Exception) { "failed" }
+        }
+
         @JavascriptInterface fun getRateDebug(): String = NowPlayingService.rateDbg
 
         @JavascriptInterface fun getNow(): String = NowPlayingService.lastNow
