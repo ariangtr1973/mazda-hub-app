@@ -460,12 +460,47 @@
   #drawer .sheet { height: 100%; }
   .app .mono { width: 64px; height: 64px; }
   .app .nm { font-size: 1rem; font-weight: 500; }
+
+  /* Theme One style 3D abstract, only behind the top row of panes */
+  .bg-art { position: absolute; left: -9%; top: 0; height: 63%; width: 140%; opacity: 1; filter: hue-rotate(calc((var(--h) - 210) * 1deg)) saturate(1.15);
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 82%, transparent 100%); mask-image: linear-gradient(180deg, #000 0%, #000 82%, transparent 100%); }
+  .bg-tiles { opacity: 0.55; }
+  .bg-glow { background:
+      radial-gradient(ellipse 60% 30% at 50% 100%, hsl(var(--h) 100% 52% / 0.55), transparent 72%),
+      radial-gradient(ellipse 36% 40% at 8% 6%, hsl(calc(var(--h) + 40) 95% 52% / 0.22), transparent 70%),
+      radial-gradient(ellipse 34% 38% at 96% 10%, hsl(calc(var(--h) - 24) 100% 56% / 0.18), transparent 70%); }
 </style>
 
 <div class="bg" aria-hidden="true">
   <video id="bg-video" muted loop playsinline hidden></video>
   <div class="bg-glow"></div>
   <div class="bg-tiles"></div>
+  <svg class="bg-art" viewBox="0 0 1000 400" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  <defs>
+    <linearGradient id="baSlab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05070b"/><stop offset="1" stop-color="#101a2c"/></linearGradient>
+    <linearGradient id="baPlate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7587a6"/><stop offset="0.45" stop-color="#2c3a52"/><stop offset="1" stop-color="#0a1019"/></linearGradient>
+    <linearGradient id="baPlate2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a5b78"/><stop offset="1" stop-color="#0a1019"/></linearGradient>
+    <linearGradient id="baFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fc2ff"/><stop offset="0.5" stop-color="#2d86ff"/><stop offset="1" stop-color="#0a2c66"/></linearGradient>
+    <radialGradient id="baGlow" cx="500" cy="330" r="330" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9fd4ff" stop-opacity="0.95"/><stop offset="0.25" stop-color="#2f8dff" stop-opacity="0.65"/><stop offset="0.65" stop-color="#0e3a8a" stop-opacity="0.22"/><stop offset="1" stop-color="#0a2a66" stop-opacity="0"/></radialGradient>
+    <g id="baHalf">
+      <polygon points="500,0 770,0 910,86 910,400 500,400" fill="url(#baSlab)" opacity="0.85"/>
+      <polygon points="500,60 700,60 820,130 820,400 500,400" fill="#0b1422" opacity="0.7"/>
+      <polygon points="500,150 610,150 650,172 740,172 790,196 880,196 930,222 1000,222 1000,400 500,400" fill="url(#baPlate2)" opacity="0.9"/>
+      <polygon points="500,218 640,218 690,240 790,240 850,266 1000,266 1000,400 500,400" fill="url(#baPlate)"/>
+      <polyline points="500,218 640,218 690,240 790,240 850,266 1000,266" fill="none" stroke="#9fb6d6" stroke-opacity="0.55" stroke-width="1.6"/>
+      <polyline points="500,150 610,150 650,172 740,172 790,196 880,196 930,222 1000,222" fill="none" stroke="#6f86a8" stroke-opacity="0.35" stroke-width="1.2"/>
+      <polygon points="500,296 596,296 668,400 500,400" fill="url(#baFloor)"/>
+      <g stroke="#6fb8ff" stroke-opacity="0.45" stroke-width="1.4" fill="none"><line x1="596" y1="296" x2="668" y2="400"/><line x1="640" y1="240" x2="760" y2="400"/><line x1="690" y1="240" x2="900" y2="400"/><line x1="560" y1="296" x2="590" y2="400"/></g>
+      <g stroke="#000" stroke-opacity="0.35" stroke-width="2" fill="none"><line x1="740" y1="172" x2="740" y2="240"/><line x1="880" y1="196" x2="880" y2="266"/></g>
+    </g>
+  </defs>
+  <use href="#baHalf"/>
+  <use href="#baHalf" transform="translate(1000 0) scale(-1 1)"/>
+  <rect x="496" y="40" width="8" height="270" fill="#04070c" opacity="0.9"/>
+  <g fill="#0a1a33"><rect x="498.2" y="168" width="3.6" height="14"/><rect x="498.2" y="196" width="3.6" height="22"/><rect x="498.2" y="236" width="3.6" height="30"/><rect x="498.2" y="282" width="3.6" height="40"/></g>
+  <rect width="1000" height="400" fill="url(#baGlow)"/>
+</svg>
+
   <div class="bg-beam b1"></div>
   <div class="bg-beam b2"></div>
   <div class="bg-shade"></div>
