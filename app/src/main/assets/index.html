@@ -532,12 +532,12 @@
   .wx-seg button { min-height: 44px; padding: 0 22px; border-radius: 999px; font-size: 0.95rem; font-weight: 500; letter-spacing: 0.04em; color: var(--ink-dim); }
   .wx-seg button.on { background: var(--accent-dim); color: #fff; box-shadow: inset 0 0 0 1px var(--accent); }
   .wx-view { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
-  .wx-days { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(2, 1fr); gap: 8px; }
+  .wx-days { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: 1fr; gap: 10px; }
   .wxd { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; border-radius: 14px; border: 1px solid rgba(255,255,255,0.16); background: rgba(0,0,0,0.42); padding: 4px; min-height: 0; }
   .wxd.today { border-color: var(--accent); background: var(--accent-faint); }
   .wxd span { font-size: 0.85rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
-  .wxd .wi { width: 34px; height: 34px; flex: none; }  .wxd span { line-height: 1.1; padding-top: 2px; } .wxd .wi svg { width: 100%; height: 100%; display: block; overflow: visible; stroke: none; fill: none; }
-  .wxd b { font-size: 1.3rem; font-weight: 500; } .wxd small { font-size: 0.95rem; color: var(--ink-dim); font-weight: 400; }
+  .wxd .wi { width: 56px; height: 56px; flex: none; }  .wxd span { line-height: 1.1; padding-top: 2px; } .wxd .wi svg { width: 100%; height: 100%; display: block; overflow: visible; stroke: none; fill: none; }
+  .wxd b { font-size: 1.8rem; font-weight: 500; } .wxd small { font-size: 0.95rem; color: var(--ink-dim); font-weight: 400; }
   .wxd em { font-style: normal; font-size: 0.72rem; font-weight: 600; color: #7fd0ff; min-height: 1em; }
   .radar { position: relative; flex: 1 1 0; min-height: 0; border-radius: 14px; overflow: hidden; background: #0a1017; border: 1px solid rgba(255,255,255,0.16); }
   .rd-base, .rd-frames, .rf { position: absolute; inset: 0; }
@@ -558,6 +558,21 @@
   .ready { padding: 12px 16px; border-radius: 14px; font-size: 0.95rem; font-weight: 500; line-height: 1.35; border: 1px solid; } .ready.ok { border-color: #3ddc84; background: rgba(61,220,132,0.12); } .ready.warn { border-color: var(--warn); background: rgba(255,181,71,0.12); }
   #btn-mix.on { border-color: var(--accent); background: hsl(var(--h) 100% 55% / 0.20); box-shadow: 0 0 22px var(--accent-dim); }
   details.diag { margin-top: 6px; } details.diag summary { font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); padding: 10px 4px; min-height: 44px; }
+
+  .statbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #000; border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; padding: 6px 12px; min-height: 46px; flex: none; }
+  .sb { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 1rem; font-weight: 600; letter-spacing: 0.03em; min-height: 40px; background: none; border: 0; padding: 0 4px; }
+  .sb svg { height: 22px; width: auto; flex: none; }
+  .sb.net svg { width: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+  .sb.net svg circle { fill: currentColor; stroke: none; }
+  .sb.net .wx { display: none; stroke: #ff5a5a; }
+  .sb.net.off { color: #ff7070; } .sb.net.off .wx { display: block; } .sb.net.off .w0, .sb.net.off .w1, .sb.net.off .w2, .sb.net.off .w3 { opacity: 0.35; }
+  .sb.net.lim { color: #ffc23d; }
+  .sb.net.on { color: #6dffb0; }
+  .sb.bat svg:first-child { width: 36px; height: 20px; }
+  .sb.bat.low { color: #ff6b6b; } .sb.bat.chg { color: #6dffb0; }
+  .sb .bolt { height: 18px; width: 14px; }
+  .stack > .pane { padding-right: 34px; } .wx-pane { padding-right: 34px; } .wx-pane > * { min-width: 0; max-width: 100%; }
+  .wx-now { padding-right: 4px; } .wx-hours > *, .wx-side .stat { min-width: 0; }
 </style>
 
 <div class="bg" aria-hidden="true">
@@ -674,7 +689,7 @@
 
         <div class="pane wx-pane k-cloud" id="wx-pane" role="tabpanel" aria-labelledby="tab-1">
           <div class="wx-seg" role="tablist">
-            <button class="on" data-v="now">Now</button><button data-v="10d">10-Day</button><button data-v="rad">Radar</button>
+            <button class="on" data-v="now">Now</button><button data-v="10d">5-Day</button><button data-v="rad">Radar</button>
           </div>
           <div class="wx-view" id="wxv-now">
             <div class="wx-now">
@@ -710,7 +725,10 @@
   </section>
 
   <section class="glass timep" aria-label="Time">
-    <div class="label">Time</div>
+    <div class="statbar" id="statbar">
+      <button class="sb net" id="sb-net" aria-label="Network status, tap for Wi-Fi settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="w3" d="M2.5 9a14 14 0 0 1 19 0"/><path class="w2" d="M5.6 12.4a9.6 9.6 0 0 1 12.8 0"/><path class="w1" d="M8.8 15.8a5 5 0 0 1 6.4 0"/><circle class="w0" cx="12" cy="19" r="1.5"/><path class="wx" d="M4 4l16 16"/></svg><span id="sb-net-t">--</span></button>
+      <div class="sb bat" id="sb-bat" aria-label="Battery"><svg viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="1" width="23" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="25" y="4.5" width="2.2" height="5" rx="1" fill="currentColor"/><rect id="sb-fill" x="2.8" y="2.8" width="0" height="8.4" rx="1.5" fill="currentColor"/></svg><span id="sb-bat-t">--%</span><svg class="bolt" id="sb-bolt" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="currentColor"/></svg></div>
+    </div>
     <div class="time-wrap">
       <div class="time-big"><span id="clock-hm">12:00</span><span class="time-ampm" id="clock-ampm">AM</span></div>
       <div class="time-date" id="clock-date">---</div>
@@ -1199,6 +1217,7 @@
     pane = np;
     try { if (np !== 1) RAD.close(); else if (wxView === 'rad') RAD.open(); } catch (e) { }
     $('stack').style.transform = 'rotateX(' + (-pane * 180) + 'deg)';
+    document.querySelectorAll('#stack > .pane').forEach((p, k) => { p.style.pointerEvents = k === pane ? 'auto' : 'none'; });
     document.querySelectorAll('.tab').forEach((t, k) => t.setAttribute('aria-selected', k === pane ? 'true' : 'false'));
     document.querySelectorAll('.dots span').forEach((d, k) => d.classList.toggle('on', k === pane));
   }
@@ -1758,7 +1777,7 @@
   function renderDays(d) {
     const box = $('wx-days'); box.innerHTML = '';
     const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    d.time.forEach((t, i) => {
+    d.time.slice(0, 5).forEach((t, i) => {
       const dt = new Date(t + 'T12:00:00'), pp = d.precipitation_probability_max[i] || 0;
       const el = document.createElement('div'); el.className = 'wxd' + (i === 0 ? ' today' : '');
       el.innerHTML = '<span>' + (i === 0 ? 'Today' : names[dt.getDay()]) + '</span><div class="wi">' + wxIcon(wxKind(d.weather_code[i]), false) + '</div><b>' + Math.round(d.temperature_2m_max[i]) + '°</b><small>' + Math.round(d.temperature_2m_min[i]) + '°</small><em>' + (pp >= 20 ? pp + '%' : '') + '</em>';
@@ -1867,7 +1886,7 @@
       const have = TM.has(), la = TM.pos()[0], lo = TM.pos()[1];
       const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + la.toFixed(3) + '&longitude=' + lo.toFixed(3) +
         '&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,is_day&hourly=temperature_2m,precipitation_probability,weather_code,is_day' +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=10&timezone=auto';
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=5&timezone=auto';
       const r = await fetch(u, { cache: 'no-store' });
       if (!r.ok) return;
       const j = await r.json(), c = j.current, night = c.is_day === 0, kind = wxKind(c.weather_code);
@@ -2142,6 +2161,19 @@
   fitStage();
 
   if (!NATIVE) loadTrack(0);
+
+  // ---------- network + battery ----------
+  function paintStatus() {
+    if (!NATIVE) return;
+    let o; try { o = JSON.parse(window.HubNative.getStatus()); } catch (e) { return; }
+    const n = $('sb-net'); n.className = 'sb net ' + (o.net === 'online' ? 'on' : o.net === 'limited' ? 'lim' : 'off');
+    $('sb-net-t').textContent = o.net === 'online' ? 'Online' : o.net === 'limited' ? 'No internet' : 'Offline';
+    const b = $('sb-bat'), pct = Math.max(0, Math.min(100, o.bat));
+    b.className = 'sb bat' + (o.chg ? ' chg' : pct <= 20 ? ' low' : '');
+    $('sb-fill').setAttribute('width', String(Math.round(19 * pct / 100 * 1.0))); $('sb-bat-t').textContent = pct + '%'; $('sb-bolt').hidden = !o.chg;
+  }
+  $('sb-net').addEventListener('click', () => { if (NATIVE) { try { window.HubNative.openSetup('wifi'); } catch (e) { } } });
+  paintStatus(); setInterval(paintStatus, 15000); window.addEventListener('focus', paintStatus);
 </script>
 
 </body>

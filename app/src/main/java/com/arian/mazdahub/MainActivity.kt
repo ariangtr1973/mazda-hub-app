@@ -717,6 +717,24 @@ class MainActivity : Activity() {
         @JavascriptInterface fun mixNow(artist: String, title: String): String = startMix(artist, title)
         @JavascriptInterface fun cancelMix() { }
         @JavascriptInterface fun mixPending(): Boolean = false
+        @JavascriptInterface fun getStatus(): String {
+            val c = this@MainActivity
+            val o = JSONObject()
+            try {
+                val cm = c.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+                o.put("net", if (caps == null) "off" else if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) "online" else "limited")
+            } catch (e: Exception) { o.put("net", "off") }
+            try {
+                val i = c.registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                val lv = i?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                val sc = i?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100) ?: 100
+                val st = i?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
+                o.put("bat", if (lv < 0) 0 else lv * 100 / sc)
+                o.put("chg", st == android.os.BatteryManager.BATTERY_STATUS_CHARGING || st == android.os.BatteryManager.BATTERY_STATUS_FULL)
+            } catch (e: Exception) { o.put("bat", 0); o.put("chg", false) }
+            return o.toString()
+        }
         @JavascriptInterface fun getMixStatus(): String = (if (MixService.inst == null) "helper off" else "helper on") + ": " + MixService.status
         @JavascriptInterface fun getTrackDebug(): String {
             val c = NowPlayingService.controller ?: return "no player"
@@ -775,6 +793,7 @@ class MainActivity : Activity() {
                         "battery" -> startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
                         "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                         "a11y" -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        "wifi" -> startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
                         "pip" -> startActivity(Intent("android.settings.PICTURE_IN_PICTURE_SETTINGS"))
                         "loc" -> requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQ_LOC)
                         "mic" -> requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
