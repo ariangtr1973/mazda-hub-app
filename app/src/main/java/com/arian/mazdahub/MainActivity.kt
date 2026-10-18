@@ -793,6 +793,7 @@ class MainActivity : Activity() {
                         "battery" -> startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
                         "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                         "a11y" -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        "android" -> startActivity(Intent(Settings.ACTION_SETTINGS))
                         "wifi" -> startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
                         "pip" -> startActivity(Intent("android.settings.PICTURE_IN_PICTURE_SETTINGS"))
                         "loc" -> requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQ_LOC)

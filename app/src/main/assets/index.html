@@ -559,7 +559,7 @@
   #btn-mix.on { border-color: var(--accent); background: hsl(var(--h) 100% 55% / 0.20); box-shadow: 0 0 22px var(--accent-dim); }
   details.diag { margin-top: 6px; } details.diag summary { font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); padding: 10px 4px; min-height: 44px; }
 
-  .statbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #000; border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; padding: 6px 12px; min-height: 46px; flex: none; }
+  .statbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: none; border: 0; padding: 2px 4px; min-height: 46px; flex: none; text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
   .sb { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 1rem; font-weight: 600; letter-spacing: 0.03em; min-height: 40px; background: none; border: 0; padding: 0 4px; }
   .sb svg { height: 22px; width: auto; flex: none; }
   .sb.net svg { width: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
@@ -570,6 +570,8 @@
   .sb.net.on { color: #6dffb0; }
   .sb.bat svg:first-child { width: 36px; height: 20px; }
   .sb.bat.low { color: #ff6b6b; } .sb.bat.chg { color: #6dffb0; }
+  .sb.ags svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 1.7; stroke-linejoin: round; }
+  .sb.ags { min-width: 48px; justify-content: center; }
   .sb .bolt { height: 18px; width: 14px; }
   .stack > .pane { padding-right: 34px; } .wx-pane { padding-right: 34px; } .wx-pane > * { min-width: 0; max-width: 100%; }
   .wx-now { padding-right: 4px; } .wx-hours > *, .wx-side .stat { min-width: 0; }
@@ -727,6 +729,7 @@
   <section class="glass timep" aria-label="Time">
     <div class="statbar" id="statbar">
       <button class="sb net" id="sb-net" aria-label="Network status, tap for Wi-Fi settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="w3" d="M2.5 9a14 14 0 0 1 19 0"/><path class="w2" d="M5.6 12.4a9.6 9.6 0 0 1 12.8 0"/><path class="w1" d="M8.8 15.8a5 5 0 0 1 6.4 0"/><circle class="w0" cx="12" cy="19" r="1.5"/><path class="wx" d="M4 4l16 16"/></svg><span id="sb-net-t">--</span></button>
+      <button class="sb ags" id="sb-android" aria-label="Android settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 3a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 3h4l.4-3a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4z"/><circle cx="12.9" cy="12" r="3"/></svg></button>
       <div class="sb bat" id="sb-bat" aria-label="Battery"><svg viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="1" width="23" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="25" y="4.5" width="2.2" height="5" rx="1" fill="currentColor"/><rect id="sb-fill" x="2.8" y="2.8" width="0" height="8.4" rx="1.5" fill="currentColor"/></svg><span id="sb-bat-t">--%</span><svg class="bolt" id="sb-bolt" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="currentColor"/></svg></div>
     </div>
     <div class="time-wrap">
@@ -2173,6 +2176,7 @@
     $('sb-fill').setAttribute('width', String(Math.round(19 * pct / 100 * 1.0))); $('sb-bat-t').textContent = pct + '%'; $('sb-bolt').hidden = !o.chg;
   }
   $('sb-net').addEventListener('click', () => { if (NATIVE) { try { window.HubNative.openSetup('wifi'); } catch (e) { } } });
+  $('sb-android').addEventListener('click', () => { if (NATIVE) { try { window.HubNative.openSetup('android'); } catch (e) { } } });
   paintStatus(); setInterval(paintStatus, 15000); window.addEventListener('focus', paintStatus);
 </script>
 
