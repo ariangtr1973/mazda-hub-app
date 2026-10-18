@@ -282,7 +282,7 @@
   .app .mono.has-img { background: none; border: none; box-shadow: none; }
   .srow { display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 0 18px; border-radius: 16px; border: 1px solid var(--glass-edge); background: rgba(255,255,255,0.05); }
   .srow .st { margin-left: auto; font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
-  .srow .st.ok { color: var(--accent); }
+  .srow .st.ok { color: #5dffa5; }
   .srow .st.no { color: var(--warn); }
   .setgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; overflow-y: auto; align-content: start; }
   .setcol { display: flex; flex-direction: column; gap: 10px; }
@@ -836,7 +836,6 @@
           <button class="srow" id="p-battery"><span>Run in background</span><span class="st" id="s-battery"></span></button>
           <button class="srow" id="p-notif"><span>Now playing and navigation info</span><span class="st" id="s-notif"></span></button>
           <button class="srow" id="p-loc"><span>Location (map and weather)</span><span class="st" id="s-loc"></span></button>
-          <button class="srow" id="p-pip"><span>Stop Maps shrinking when you press Home</span><span class="st">Open</span></button>
           <button class="srow" id="p-mic"><span>Live visualizer (no recording)</span><span class="st" id="s-mic"></span></button>
           <button class="srow" id="p-bt"><span>Bluetooth access</span><span class="st" id="s-bt"></span></button>
           <button class="srow" id="p-a11y"><span>Allow Start mix button (Accessibility)</span><span class="st" id="s-a11y"></span></button>
@@ -849,9 +848,10 @@
           <button class="srow" id="p-auto"><span>Start music when car connects</span><span class="st" id="s-auto"></span></button>
           <button class="srow" id="p-delay"><span>Wait before play</span><span class="st ok" id="s-delay"></span></button>
           <button class="srow" id="p-awake"><span>Keep screen on</span><span class="st" id="s-awake"></span></button>
-          <button class="srow" id="p-lite"><span>Lite mode (faster on older tablets)</span><span class="st" id="s-lite"></span></button>
-          <button class="srow" id="p-test"><span>Test auto start now</span><span class="st">Run</span></button>
-          <details class="diag"><summary>Diagnostics</summary><div class="autoline" id="autoline"></div></details>
+          <details class="diag"><summary>Advanced</summary>
+            <button class="srow" id="p-lite"><span>Lite mode (faster on older tablets)</span><span class="st" id="s-lite"></span></button>
+            <button class="srow" id="p-test"><span>Test auto start now</span><span class="st">Run</span></button>
+            <div class="autoline" id="autoline"></div></details>
         </div>
       </div>
     </div>
@@ -1668,7 +1668,7 @@
   });
   $('setup-close').addEventListener('click', () => $('setup').classList.remove('open'));
   $('setup').addEventListener('click', e => { if (e.target === $('setup')) $('setup').classList.remove('open'); });
-  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-loc', 'loc'], ['p-pip', 'pip'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home'], ['p-a11y', 'a11y']].forEach(([id, k]) =>
+  [['p-notif', 'notif'], ['p-mic', 'mic'], ['p-loc', 'loc'], ['p-overlay', 'overlay'], ['p-write', 'write'], ['p-battery', 'battery'], ['p-bt', 'bt'], ['p-home', 'home'], ['p-a11y', 'a11y']].forEach(([id, k]) =>
     $(id).addEventListener('click', () => { if (NATIVE) H().openSetup(k); }));
   $('p-auto').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setAuto(!c.auto); renderSetup(); });
   $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });
