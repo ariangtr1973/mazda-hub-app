@@ -85,6 +85,24 @@ class MixService : AccessibilityService() {
         } else floatLog = "no minimize button. maps window [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "]. Windows: " + seen.joinToString(" / ")
     }
 
+    /** Taps the app's own Play / Resume button, as you would by hand. */
+    fun tapPlay(pkg: String): Boolean {
+        var done = false
+        try {
+            for (w in windows ?: return false) {
+                val root = w.root ?: continue
+                if (root.packageName?.toString() != pkg) continue
+                walk(root) { n ->
+                    if (!done) {
+                        val l = label(n).lowercase().trim('|', ' ')
+                        if (l == "play" || l == "play video" || l == "resume" || l == "play|play" || l.startsWith("play song")) { if (clickUp(n)) done = true }
+                    }
+                }
+            }
+        } catch (e: Exception) { }
+        return done
+    }
+
     private fun walk(n: AccessibilityNodeInfo?, f: (AccessibilityNodeInfo) -> Unit) {
         if (n == null) return
         f(n)

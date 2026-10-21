@@ -271,19 +271,28 @@ class MainActivity : Activity() {
             }
             if (used == null) { Ops.log(this, "No music app could be opened"); say("No music app found. Pick one in the music picker."); return@waitOnline }
             Ops.log(this, "Opened " + used + ", will press play in " + prefs.getInt("delay_s", 8) + " s")
-            val delay = prefs.getInt("delay_s", 8) * 1000L
-            main.postDelayed({
-                if (id != runId) return@postDelayed
-                if (!Ops.musicActive(this)) { if (NowPlayingService.inst?.resume(used) != true) Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY) }
-                main.postDelayed({
-                    if (id != runId) return@postDelayed
-                    if (!Ops.musicActive(this)) { if (NowPlayingService.inst?.resume(used) != true) Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY) }
-                    // Back to the hub so the music keeps playing underneath it.
-                    bringHubToFront(id)
-                    Ops.log(this, if (Ops.musicActive(this)) "Music is playing. Back to the hub" else "Music still silent after play. Back to the hub")
-                    say(if (Ops.musicActive(this)) "Playing" else "Music app opened. Press play if it is quiet.")
-                }, 5000)
-            }, delay)
+            val delay = Math.max(4, prefs.getInt("delay_s", 8)) * 1000L
+            // Keep trying for ~35 s: a freshly opened music app needs a while before it has a player to press play on.
+            val usedPkg: String = used
+            fun attempt(n: Int) {
+                if (id != runId) return
+                if (Ops.musicActive(this)) {
+                    bringHubToFront(id); Ops.log(this, "Music is playing (try " + n + "). Back to the hub"); say("Playing"); return
+                }
+                if (n >= 12) {
+                    bringHubToFront(id); Ops.log(this, "Music still silent after 12 tries. Back to the hub"); say("Music app opened. Press play if it is quiet."); return
+                }
+                val svc = NowPlayingService.inst
+                val how = when {
+                    svc == null -> { Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "no listener, media key" }
+                    n < 3 -> if (svc.resume(usedPkg)) "resume" else "no player yet"
+                    n < 6 -> if (svc.playSaved(usedPkg)) "play last track by name" else "no player yet"
+                    else -> { val tapped = MixService.inst?.tapPlay(usedPkg) ?: false; if (!tapped) svc.resume(usedPkg); if (tapped) "tapped Play in the app" else "no Play button found" }
+                }
+                if (n % 3 == 0) Ops.log(this, "Try " + n + ": " + how)
+                main.postDelayed({ attempt(n + 1) }, 3000)
+            }
+            main.postDelayed({ attempt(0) }, delay)
         }
     }
 

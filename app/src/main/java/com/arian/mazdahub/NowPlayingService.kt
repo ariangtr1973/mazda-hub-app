@@ -151,6 +151,18 @@ class NowPlayingService : NotificationListenerService() {
         return true
     }
 
+    /** The app opened with an empty player: ask it to play the last track we saw, by name. */
+    fun playSaved(pkg: String): Boolean {
+        val sessions = try { msm?.getActiveSessions(cn) } catch (e: Exception) { null } ?: all
+        val c = sessions.firstOrNull { it.packageName == pkg } ?: return false
+        if (isPlaying(c)) return true
+        val saved = try { JSONObject(Ops.prefs(this).getString("last_$pkg", "") ?: "") } catch (e: Exception) { null } ?: return false
+        val title = saved.optString("title"); if (title.isBlank()) return false
+        select(pkg)
+        c.transportControls.playFromSearch((title + " " + saved.optString("artist")).trim(), null)
+        return true
+    }
+
     private fun push() {
         val c = current
         val o = JSONObject()
