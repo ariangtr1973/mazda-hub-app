@@ -609,16 +609,21 @@
   .navapp.inpane { border-color: var(--accent); }
 
   /* ---- v0.22: bigger map stage, theme-tinted dark map frame, no white border ---- */
-  .hub { grid-template-columns: 2fr 1fr !important; }
-  .media { height: 266px !important; }
+  .hub { grid-template-columns: 2.4fr 1fr !important; }
+  .media { height: 244px !important; }
   .media .wavewrap { height: 64px !important; top: 8px !important; }
-  .media .art { width: 142px !important; height: 142px !important; }
+  .media .art { width: 128px !important; height: 128px !important; }
+  .fav { width: 82px; height: 94px; } .fav img { width: 50px; height: 50px; }
   .vbar b { display: none; } .volrow .kc { min-width: 0; } .vbar { min-width: 90px; flex: 1 1 0; }
   .mapbox { border: 1px solid hsl(var(--h) 85% 58% / 0.38) !important; box-shadow: inset 0 0 34px hsl(var(--h) 100% 50% / 0.16), 0 0 22px hsl(var(--h) 100% 50% / 0.12); background: #05080d !important; }
   .mapbox::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: hsl(var(--h) 90% 40%); mix-blend-mode: color; opacity: 0.22; border-radius: inherit; }
   .mapbox .map-tiles { filter: brightness(0.9) contrast(1.08) saturate(1.1); }
   .swipe { border-color: hsl(var(--h) 80% 60% / 0.22); }
   .mapbox .navapps .navapp { border-color: hsl(var(--h) 85% 58% / 0.45); }
+
+  .time-big { font-size: clamp(3rem, 6.2cqw, 5rem) !important; }
+  .timep { padding: 12px 14px !important; }
+  .volrow { gap: 6px; } .volrow .kc { width: 56px !important; flex: none; } .volrow #drawer-btn { width: 74px !important; } .vbar { min-width: 60px !important; }
 </style>
 
 <div class="bg" aria-hidden="true">
@@ -1671,7 +1676,7 @@
   // Asks Android to open the navigation app sized to the map pane (works when freeform windows are on; otherwise opens normally).
   function launchInPane(pkg) {
     try {
-      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, r = { left: r0.left + 10, top: r0.top + 30, right: r0.right - 10, bottom: r0.bottom - 8 };
+      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, r = { left: r0.left + 8, top: r0.top + 28, right: r0.right - 8, bottom: r0.bottom - 4 };
       H().launchAppIn(pkg, Math.round(r.left * sx), Math.round(r.top * sx), Math.round(r.right * sx), Math.round(r.bottom * sx));
     } catch (e) { try { H().launchApp(pkg); } catch (x) { } }
   }
@@ -2069,7 +2074,7 @@
       const a = apps[0]; if (!a) return false;
       const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1;
       let ok = false;
-      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round((r0.left + 10) * sx), Math.round((r0.top + 30) * sx), Math.round((r0.right - 10) * sx), Math.round((r0.bottom - 8) * sx)); } catch (e) { }
+      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round((r0.left + 8) * sx), Math.round((r0.top + 28) * sx), Math.round((r0.right - 8) * sx), Math.round((r0.bottom - 4) * sx)); } catch (e) { }
       if (!ok) return false;
       navPkg = a.id; addRecent(d); closeSheet(); toast('Navigating to ' + (d.name || 'destination') + ' in ' + a.name);
       return true;
