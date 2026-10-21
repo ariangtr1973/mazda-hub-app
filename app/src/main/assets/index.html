@@ -1671,7 +1671,7 @@
   // Asks Android to open the navigation app sized to the map pane (works when freeform windows are on; otherwise opens normally).
   function launchInPane(pkg) {
     try {
-      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, ins = 6, r = { left: r0.left + ins, top: r0.top + ins, right: r0.right - ins, bottom: r0.bottom - ins };
+      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, r = { left: r0.left + 10, top: r0.top + 30, right: r0.right - 10, bottom: r0.bottom - 8 };
       H().launchAppIn(pkg, Math.round(r.left * sx), Math.round(r.top * sx), Math.round(r.right * sx), Math.round(r.bottom * sx));
     } catch (e) { try { H().launchApp(pkg); } catch (x) { } }
   }
@@ -2067,9 +2067,9 @@
     function handoff(d) {
       let apps = []; try { apps = JSON.parse(H().getNavApps()); } catch (e) { }
       const a = apps[0]; if (!a) return false;
-      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, ins = 6;
+      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1;
       let ok = false;
-      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round((r0.left + ins) * sx), Math.round((r0.top + ins) * sx), Math.round((r0.right - ins) * sx), Math.round((r0.bottom - ins) * sx)); } catch (e) { }
+      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round((r0.left + 10) * sx), Math.round((r0.top + 30) * sx), Math.round((r0.right - 10) * sx), Math.round((r0.bottom - 8) * sx)); } catch (e) { }
       if (!ok) return false;
       navPkg = a.id; addRecent(d); closeSheet(); toast('Navigating to ' + (d.name || 'destination') + ' in ' + a.name);
       return true;

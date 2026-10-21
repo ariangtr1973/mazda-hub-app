@@ -42,6 +42,11 @@ class MixService : AccessibilityService() {
         }, if (ok) 1300 else 400)
     }
 
+    /** Where the floating window for this app currently is, or null if it is not on screen. */
+    fun floatBounds(pkg: String): Rect? = try {
+        windows?.firstOrNull { it.root?.packageName?.toString() == pkg }?.let { val r = Rect(); it.getBoundsInScreen(r); r }
+    } catch (e: Exception) { null }
+
     /** When the user leaves the hub, tuck away the floating navigation window so it does not cover other apps. */
     fun minimizeFloating(pkg: String) {
         floatLog = "looking for the $pkg window"

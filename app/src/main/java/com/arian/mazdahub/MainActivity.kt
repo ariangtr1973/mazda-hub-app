@@ -284,9 +284,32 @@ class MainActivity : Activity() {
     }
 
     private var visible = false
-    override fun onResume() { super.onResume(); visible = true; startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
+    override fun onResume() { super.onResume(); visible = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 3000); startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
     @Volatile var floatPkg = ""
     private var floatRect: android.graphics.Rect? = null
+    private val lockHandler = Handler(Looper.getMainLooper())
+    private var drift = 0
+    /** Keeps the Maps window in its pane: if it has been dragged away from its spot, put it back. */
+    private val lockTick = object : Runnable {
+        override fun run() {
+            try {
+                val pk = floatPkg; val want = floatRect
+                if (visible && pk.isNotEmpty() && want != null) {
+                    val b = MixService.inst?.floatBounds(pk)
+                    if (b != null && (Math.abs(b.left - want.left) > 40 || Math.abs(b.top - want.top) > 40 || Math.abs(b.right - want.right) > 60 || Math.abs(b.bottom - want.bottom) > 60)) {
+                        if (++drift >= 2) { drift = 0; relaunchFloat(pk, want) }
+                    } else drift = 0
+                }
+            } catch (e: Exception) { }
+            lockHandler.postDelayed(this, 2500)
+        }
+    }
+    private fun relaunchFloat(pk: String, r: android.graphics.Rect) {
+        val i = packageManager.getLaunchIntentForPackage(pk) ?: return
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(r)
+        try { startActivity(i, o.toBundle()) } catch (e: Exception) { }
+    }
     private var tuckedPkg = ""
     /** Leaving the hub: the floating Maps window steps back with it. */
     @Volatile var lastOutLaunch = 0L
@@ -306,7 +329,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) { } }, 500)
         }
     }
-    override fun onPause() { visible = false; stopViz(); stopLoc(); super.onPause() }
+    override fun onPause() { visible = false; lockHandler.removeCallbacks(lockTick); stopViz(); stopLoc(); super.onPause() }
 
     /** Tries three ways to get the hub back in front of the music app. */
     private fun bringHubToFront(id: Int) {
