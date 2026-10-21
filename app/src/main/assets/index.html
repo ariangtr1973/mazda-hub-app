@@ -606,6 +606,18 @@
   @keyframes wob { from { transform: rotate(-1.2deg); } to { transform: rotate(1.2deg); } }
   .favempty { color: var(--ink-dim); font-size: 0.85rem; align-self: center; }
   .navapp.inpane { border-color: var(--accent); }
+
+  /* ---- v0.22: bigger map stage, theme-tinted dark map frame, no white border ---- */
+  .hub { grid-template-columns: 2fr 1fr !important; }
+  .media { height: 266px !important; }
+  .media .wavewrap { height: 64px !important; top: 8px !important; }
+  .media .art { width: 142px !important; height: 142px !important; }
+  .vbar b { display: none; } .volrow .kc { min-width: 0; } .vbar { min-width: 90px; flex: 1 1 0; }
+  .mapbox { border: 1px solid hsl(var(--h) 85% 58% / 0.38) !important; box-shadow: inset 0 0 34px hsl(var(--h) 100% 50% / 0.16), 0 0 22px hsl(var(--h) 100% 50% / 0.12); background: #05080d !important; }
+  .mapbox::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: hsl(var(--h) 90% 40%); mix-blend-mode: color; opacity: 0.22; border-radius: inherit; }
+  .mapbox .map-tiles { filter: brightness(0.9) contrast(1.08) saturate(1.1); }
+  .swipe { border-color: hsl(var(--h) 80% 60% / 0.22); }
+  .mapbox .navapps .navapp { border-color: hsl(var(--h) 85% 58% / 0.45); }
 </style>
 
 <div class="bg" aria-hidden="true">
@@ -1656,7 +1668,7 @@
   // Asks Android to open the navigation app sized to the map pane (works when freeform windows are on; otherwise opens normally).
   function launchInPane(pkg) {
     try {
-      const r = $('map').getBoundingClientRect(), sx = window.devicePixelRatio || 1;
+      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, ins = 6, r = { left: r0.left + ins, top: r0.top + ins, right: r0.right - ins, bottom: r0.bottom - ins };
       H().launchAppIn(pkg, Math.round(r.left * sx), Math.round(r.top * sx), Math.round(r.right * sx), Math.round(r.bottom * sx));
     } catch (e) { try { H().launchApp(pkg); } catch (x) { } }
   }
