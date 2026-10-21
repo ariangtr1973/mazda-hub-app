@@ -1697,7 +1697,7 @@
   function renderSetup() {
     if (!NATIVE) return;
     let c; try { c = JSON.parse(H().getSetup()); } catch (e) { return; }
-    try { $('autoline').textContent = 'Navigation info: ' + H().getNavDebug() + ' | Thumbs: ' + (H().getRateDebug() || 'none seen') + ' | Track: ' + H().getTrackDebug() + ' | Mix helper: ' + H().getMixStatus(); } catch (e) {}
+    try { $('autoline').textContent = 'Hub v' + H().getVersion() + ' | Navigation info: ' + H().getNavDebug() + ' | Thumbs: ' + (H().getRateDebug() || 'none seen') + ' | Track: ' + H().getTrackDebug() + ' | Mix helper: ' + H().getMixStatus(); } catch (e) {}
     { const miss = [];
       if (!c.carAddr) miss.push('choose your car\u2019s Bluetooth'); if (!c.auto) miss.push('turn on \u201cStart music when car connects\u201d');
       if (!c.overlay) miss.push('allow display over other apps'); if (!c.write) miss.push('allow changing screen timeout'); if (!c.battery) miss.push('allow running in background');

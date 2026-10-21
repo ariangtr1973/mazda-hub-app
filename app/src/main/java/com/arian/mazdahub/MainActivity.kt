@@ -727,6 +727,7 @@ class MainActivity : Activity() {
             }, d)
             main.postDelayed({ if (id == runId) bringHubToFront(id) }, 7500)
         }
+        @JavascriptInterface fun getVersion(): String = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "?" } catch (e: Exception) { "?" }
         @JavascriptInterface fun getHideBars(): Boolean = Ops.prefs(this@MainActivity).getBoolean("hide_bars", false)
         @JavascriptInterface fun setHideBars(on: Boolean) { Ops.prefs(this@MainActivity).edit().putBoolean("hide_bars", on).apply(); runOnUiThread { goImmersive() } }
         @JavascriptInterface fun cleanNow(): String { cleanCaches(true); return "Cleaning" }
