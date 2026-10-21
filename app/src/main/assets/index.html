@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
+<script>document.documentElement.classList.add('boot'); setTimeout(function () { document.documentElement.classList.remove('boot'); }, 3500);</script>
+<style>html { background: #000; } html.boot body { opacity: 0; } body { transition: opacity 0.35s ease; }</style>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mazda Hub</title>
@@ -598,6 +600,7 @@
   .fav { flex: none; width: 88px; height: 104px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.22); background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03)); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; scroll-snap-align: start; color: #fff; padding: 4px; }
   .fav:active { background: var(--accent-faint); border-color: var(--accent); }
   .fav img { width: 56px; height: 56px; border-radius: 14px; }
+  .fav, .favstrip { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .fav .fn { font-size: 0.68rem; font-weight: 500; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
   .fav.add { border-style: dashed; color: var(--accent); font-size: 2.2rem; font-weight: 200; }
   .fav .rm, .fav .mv { position: absolute; top: -6px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.5); background: #1b1f2a; color: #fff; font-size: 1rem; display: none; align-items: center; justify-content: center; padding: 0; }
@@ -1029,6 +1032,7 @@
     skin = (i + SKINS.length) % SKINS.length;
     skinH = SKINS[skin].h;
     document.documentElement.style.setProperty('--h', skinH);
+    try { if (NATIVE) window.HubNative.setThemeHue(skinH); } catch (e) { }
     $('skin-name').textContent = 'Theme: ' + SKINS[skin].n;
     try { localStorage.setItem('hub-skin', String(skin)); } catch (e) {}
   }
@@ -1695,7 +1699,7 @@
   // Asks Android to open the navigation app sized to the map pane (works when freeform windows are on; otherwise opens normally).
   function launchInPane(pkg) {
     try {
-      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, r = { left: r0.left + 4, top: r0.top + 14, right: r0.right - 4, bottom: r0.bottom - 4 };
+      const r0 = $('swipe').getBoundingClientRect(), sx = window.devicePixelRatio || 1, r = { left: r0.left, top: r0.top, right: r0.right, bottom: r0.bottom };
       H().launchAppIn(pkg, Math.round(r.left * sx), Math.round(r.top * sx), Math.round(r.right * sx), Math.round(r.bottom * sx));
     } catch (e) { try { H().launchApp(pkg); } catch (x) { } }
   }
@@ -1722,7 +1726,7 @@
   function renderSetup() {
     if (!NATIVE) return;
     let c; try { c = JSON.parse(H().getSetup()); } catch (e) { return; }
-    try { $('autoline').textContent = 'Hub v' + H().getVersion() + ' | Navigation info: ' + H().getNavDebug() + ' | Thumbs: ' + (H().getRateDebug() || 'none seen') + ' | Track: ' + H().getTrackDebug() + ' | Mix helper: ' + H().getMixStatus(); } catch (e) {}
+    try { $('autoline').textContent = 'Hub v' + H().getVersion() + ' | Car auto-start log: ' + (H().getAutoLog().split('\n').join(' ; ') || 'nothing yet') + ' | Map window: ' + H().getFloatCal() + ' | Navigation info: ' + H().getNavDebug() + ' | Thumbs: ' + (H().getRateDebug() || 'none seen') + ' | Track: ' + H().getTrackDebug() + ' | Mix helper: ' + H().getMixStatus(); } catch (e) {}
     { const miss = [];
       if (!c.carAddr) miss.push('choose your car\u2019s Bluetooth'); if (!c.auto) miss.push('turn on \u201cStart music when car connects\u201d');
       if (!c.overlay) miss.push('allow display over other apps'); if (!c.write) miss.push('allow changing screen timeout'); if (!c.battery) miss.push('allow running in background');
@@ -2097,9 +2101,9 @@
     function handoff(d) {
       let apps = []; try { apps = JSON.parse(H().getNavApps()); } catch (e) { }
       const a = apps[0]; if (!a) return false;
-      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1;
+      const r0 = $('swipe').getBoundingClientRect(), sx = window.devicePixelRatio || 1;
       let ok = false;
-      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round((r0.left + 4) * sx), Math.round((r0.top + 14) * sx), Math.round((r0.right - 4) * sx), Math.round((r0.bottom - 4) * sx)); } catch (e) { }
+      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round(r0.left * sx), Math.round(r0.top * sx), Math.round(r0.right * sx), Math.round(r0.bottom * sx)); } catch (e) { }
       if (!ok) return false;
       navPkg = a.id; addRecent(d); closeSheet(); toast('Navigating to ' + (d.name || 'destination') + ' in ' + a.name);
       return true;
@@ -2291,7 +2295,7 @@
 
   // ---------- favorite apps (editable, scrollable) ----------
   const FAV = (() => {
-    let list = [], info = {}, editing = false, pick = false;
+    let list = [], info = {}, editing = false, pick = false, replaceId = '';
     try { list = JSON.parse(NATIVE ? (H().getFavs() || '[]') : (localStorage.getItem('hub-favs') || '[]')); } catch (e) { list = []; }
     if (!Array.isArray(list)) list = [];
     const strip = $('fav-strip');
@@ -2310,32 +2314,44 @@
       const mv = document.createElement('button'); mv.className = 'mv'; mv.textContent = '\u25C0'; mv.setAttribute('aria-label', 'Move ' + a.name + ' earlier');
       mv.addEventListener('click', e => { e.stopPropagation(); const i = list.indexOf(id); if (i > 0) { list.splice(i - 1, 0, list.splice(i, 1)[0]); save(); render(); } });
       b.append(mv, rm);
-      let lp = null, did = false;
-      b.addEventListener('pointerdown', () => { did = false; lp = setTimeout(() => { did = true; setEdit(true); }, 700); });
-      ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(lp)));
-      b.addEventListener('click', () => { if (did || editing) return; try { H().launchApp(id); } catch (e) { } });
+      let lp = null, did = false, px = 0, py = 0;
+      b.addEventListener('pointerdown', e => { did = false; px = e.clientX; py = e.clientY; clearTimeout(lp); lp = setTimeout(() => { did = true; setEdit(true); }, 550); });
+      b.addEventListener('pointermove', e => { if (Math.abs(e.clientX - px) > 14 || Math.abs(e.clientY - py) > 14) clearTimeout(lp); });
+      ['pointerup', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(lp)));
+      b.addEventListener('contextmenu', e => { e.preventDefault(); clearTimeout(lp); did = true; setEdit(true); });
+      b.addEventListener('click', () => {
+        if (did) { did = false; return; }
+        if (editing) { if (!NATIVE) return; pick = true; replaceId = id; openDrawer(); return; }
+        try { H().launchApp(id); } catch (e) { }
+      });
       return b;
     }
     function render() {
       strip.innerHTML = '';
       list.forEach(id => { const t = tile(id); if (t) strip.append(t); });
       const add = document.createElement('div'); add.className = 'fav add'; add.setAttribute('role', 'button'); add.setAttribute('aria-label', 'Add favorite app'); add.textContent = '+';
-      add.addEventListener('click', () => { if (!NATIVE) { toast('Favorites work in the Mazda Hub app'); return; } pick = true; openDrawer(); });
+      add.addEventListener('click', () => { if (!NATIVE) { toast('Favorites work in the Mazda Hub app'); return; } pick = true; replaceId = ''; openDrawer(); });
       strip.append(add);
       $('favs').classList.toggle('editing', editing);
-      $('fav-edit').hidden = !editing; $('fav-title').textContent = editing ? 'Reorder or remove \u2022 tap + to add' : 'Favorites';
+      $('fav-edit').hidden = !editing; $('fav-title').textContent = editing ? 'Tap icon to replace' : 'Favorites';
     }
     function setEdit(on) { editing = on; render(); }
     $('fav-edit').addEventListener('click', () => setEdit(false));
+    $('fav-strip').addEventListener('contextmenu', e => { e.preventDefault(); setEdit(true); });
     $('fav-strip').addEventListener('pointerdown', e => { if (e.target === $('fav-strip')) { clearTimeout(window.__flp); window.__flp = setTimeout(() => setEdit(true), 700); } });
     ['pointerup', 'pointercancel', 'pointermove'].forEach(ev => $('fav-strip').addEventListener(ev, () => clearTimeout(window.__flp)));
     return {
       init() { load(); if (!list.length && NATIVE) { try { const m = JSON.parse(H().getApps(false)).slice(0, 5).map(a => a.id); list = m; save(); load(); } catch (e) { } } render(); },
-      picking() { return pick; }, endPick() { pick = false; },
-      add(id) { if (!list.includes(id)) { list.push(id); save(); load(); } render(); setTimeout(() => { strip.scrollLeft = strip.scrollWidth; }, 60); }
+      picking() { return pick; }, endPick() { pick = false; replaceId = ''; },
+      add(id) { if (replaceId) { const i = list.indexOf(replaceId); replaceId = ''; if (i >= 0 && !list.includes(id)) list[i] = id; else if (!list.includes(id)) list.push(id); save(); load(); render(); return; } if (!list.includes(id)) { list.push(id); save(); load(); } render(); setTimeout(() => { strip.scrollLeft = strip.scrollWidth; }, 60); }
     };
   })();
-  setTimeout(() => FAV.init(), NATIVE ? 1200 : 0);
+  setTimeout(() => FAV.init(), NATIVE ? 200 : 0);
+
+  // Show the hub only when it has finished building, so you never see the half-loaded states.
+  function hubReveal() { document.documentElement.classList.remove('boot'); }
+  (function () { const go = () => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(hubReveal, 250)));
+    try { document.fonts && document.fonts.ready ? document.fonts.ready.then(() => setTimeout(go, NATIVE ? 450 : 0)) : setTimeout(go, 600); } catch (e) { setTimeout(go, 600); } })();
 </script>
 
 </body>

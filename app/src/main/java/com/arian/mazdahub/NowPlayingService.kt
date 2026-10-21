@@ -38,8 +38,14 @@ class NowPlayingService : NotificationListenerService() {
         override fun onSessionDestroyed() { pick(msm?.getActiveSessions(cn)) }
     }
 
+    private val carRx = CarReceiver()
+    private var rxOn = false
     override fun onListenerConnected() {
         inst = this
+        if (!rxOn) try {
+            val f = android.content.IntentFilter(); f.addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED); f.addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            registerReceiver(carRx, f); rxOn = true
+        } catch (e: Exception) { }
         cn = ComponentName(this, NowPlayingService::class.java)
         msm = getSystemService(MediaSessionManager::class.java)
         try {
@@ -50,6 +56,7 @@ class NowPlayingService : NotificationListenerService() {
     }
 
     override fun onListenerDisconnected() {
+        if (rxOn) { try { unregisterReceiver(carRx) } catch (e: Exception) { }; rxOn = false }
         try { msm?.removeOnActiveSessionsChangedListener(sessionsListener) } catch (e: Exception) { }
         current?.unregisterCallback(cb)
         current = null

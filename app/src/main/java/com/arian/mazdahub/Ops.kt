@@ -41,6 +41,15 @@ object Ops {
         mediaKey(c, code)
     }
 
+    /** Short running log of what the car auto-start did, shown in Settings > Advanced. */
+    @Synchronized fun log(c: Context, msg: String) {
+        try {
+            val t = java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date())
+            val old = (prefs(c).getString("autolog", "") ?: "").split("\n").filter { it.isNotBlank() }
+            prefs(c).edit().putString("autolog", (listOf("$t $msg") + old).take(14).joinToString("\n")).apply()
+        } catch (e: Exception) { }
+    }
+
     fun musicActive(c: Context): Boolean =
         (c.getSystemService(Context.AUDIO_SERVICE) as AudioManager).isMusicActive
 
@@ -169,15 +178,17 @@ object Ops {
 
     // ---- car Bluetooth events ----
     fun onCarConnected(c: Context) {
+        log(c, "Waking screen, opening the hub" + (if (Settings.canDrawOverlays(c)) "" else " (Display over other apps is OFF: Android may block this)"))
         setScreenTimeout(c, 4 * 60 * 60 * 1000)
         wakeScreen(c)
         val i = Intent(c, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             .putExtra("auto", true)
-        try { c.startActivity(i) } catch (e: Exception) { }
+        try { c.startActivity(i) } catch (e: Exception) { log(c, "Could not open the hub: " + e.javaClass.simpleName) }
     }
 
     fun onCarDisconnected(c: Context) {
+        log(c, "Pausing music, screen will sleep")
         MainActivity.live?.autoStop()
         mediaKey(c, KeyEvent.KEYCODE_MEDIA_PAUSE)
         setScreenTimeout(c, 15000)

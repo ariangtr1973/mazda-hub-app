@@ -254,9 +254,11 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         js("window.hub&&hub.setAwake&&hub.setAwake(true)")
         say("Car connected. Waiting for the hotspot\u2026")
+        Ops.log(this, "Waiting for the hotspot / internet")
         waitOnline(id, 180_000) {
             if (id != runId) return@waitOnline
             say("Starting music\u2026")
+            Ops.log(this, "Online. Opening your music app")
             val prefs = Ops.prefs(this)
             val want = prefs.getString("music_pkg", "") ?: ""
             var used = if (want.isNotEmpty() && Ops.launchApp(this, want)) want else null
@@ -267,7 +269,8 @@ class MainActivity : Activity() {
                     say("Your chosen app would not open. Using another music app.")
                 }
             }
-            if (used == null) { say("No music app found. Pick one in the music picker."); return@waitOnline }
+            if (used == null) { Ops.log(this, "No music app could be opened"); say("No music app found. Pick one in the music picker."); return@waitOnline }
+            Ops.log(this, "Opened " + used + ", will press play in " + prefs.getInt("delay_s", 8) + " s")
             val delay = prefs.getInt("delay_s", 8) * 1000L
             main.postDelayed({
                 if (id != runId) return@postDelayed
@@ -277,6 +280,7 @@ class MainActivity : Activity() {
                     if (!Ops.musicActive(this)) { if (NowPlayingService.inst?.resume(used) != true) Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY) }
                     // Back to the hub so the music keeps playing underneath it.
                     bringHubToFront(id)
+                    Ops.log(this, if (Ops.musicActive(this)) "Music is playing. Back to the hub" else "Music still silent after play. Back to the hub")
                     say(if (Ops.musicActive(this)) "Playing" else "Music app opened. Press play if it is quiet.")
                 }, 5000)
             }, delay)
@@ -284,24 +288,65 @@ class MainActivity : Activity() {
     }
 
     private var visible = false
-    override fun onResume() { super.onResume(); visible = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 3000); startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
+    override fun onResume() { super.onResume(); visible = true; startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
     @Volatile var floatPkg = ""
     private var floatRect: android.graphics.Rect? = null
+    private val adj = android.graphics.Rect(0, 0, 0, 0)
+    private var calib = 0
+    private var hubStarted = false
     private val lockHandler = Handler(Looper.getMainLooper())
     private var drift = 0
-    /** Keeps the Maps window in its pane: if it has been dragged away from its spot, put it back. */
+    @Volatile private var ringHue = 205
+    private var ringView: android.view.View? = null
+    @Volatile var calLog = ""
+
+    private fun adjusted(r: android.graphics.Rect) = android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom)
+
+    private fun ringDrawable(): android.graphics.drawable.Drawable {
+        val accent = android.graphics.Color.HSVToColor(floatArrayOf(ringHue.toFloat(), 0.72f, 0.98f))
+        val dm = resources.displayMetrics.density
+        val outer = android.graphics.drawable.GradientDrawable().apply { setColor(android.graphics.Color.TRANSPARENT); setStroke((9 * dm).toInt(), android.graphics.Color.parseColor("#F2070B12")); cornerRadius = 16 * dm }
+        val inner = android.graphics.drawable.GradientDrawable().apply { setColor(android.graphics.Color.TRANSPARENT); setStroke((2 * dm).toInt().coerceAtLeast(2), accent); cornerRadius = 12 * dm }
+        return android.graphics.drawable.LayerDrawable(arrayOf(outer, inner)).also { it.setLayerInset(1, (3 * dm).toInt(), (3 * dm).toInt(), (3 * dm).toInt(), (3 * dm).toInt()) }
+    }
+
+    /** A thin theme-coloured frame drawn over the Maps window's own white edge. Needs Display over other apps. */
+    private fun updateRing(win: android.graphics.Rect?) {
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            if (win == null || !hubStarted || !Settings.canDrawOverlays(this)) { ringView?.let { wm.removeView(it) }; ringView = null; return }
+            val grow = (7 * resources.displayMetrics.density).toInt()
+            val lp = WindowManager.LayoutParams(win.width() + 2 * grow, win.height() + 2 * grow, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                android.graphics.PixelFormat.TRANSLUCENT)
+            lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            lp.x = win.left - grow; lp.y = win.top - grow
+            val v = ringView
+            if (v == null) { val nv = android.view.View(this); nv.background = ringDrawable(); wm.addView(nv, lp); ringView = nv }
+            else { v.background = ringDrawable(); wm.updateViewLayout(v, lp) }
+        } catch (e: Exception) { }
+    }
+
+    /** Every moment the hub is on screen: draw the frame, and nudge the Maps window onto the map pane exactly. */
     private val lockTick = object : Runnable {
         override fun run() {
             try {
                 val pk = floatPkg; val want = floatRect
-                if (visible && pk.isNotEmpty() && want != null) {
-                    val b = MixService.inst?.floatBounds(pk)
-                    if (b != null && (Math.abs(b.left - want.left) > 40 || Math.abs(b.top - want.top) > 40 || Math.abs(b.right - want.right) > 60 || Math.abs(b.bottom - want.bottom) > 60)) {
-                        if (++drift >= 2) { drift = 0; relaunchFloat(pk, want) }
+                val b = if (pk.isNotEmpty()) MixService.inst?.floatBounds(pk) else null
+                updateRing(b)
+                if (hubStarted && b != null && want != null) {
+                    val ex = Math.abs(b.left - want.left) + Math.abs(b.top - want.top) + Math.abs(b.right - want.right) + Math.abs(b.bottom - want.bottom)
+                    calLog = "want [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "] actual [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] adj [" + adj.left + "," + adj.top + "," + adj.right + "," + adj.bottom + "]"
+                    if (ex > 16) {
+                        if (++drift >= 2 && visible) {
+                            drift = 0
+                            if (calib < 3) { calib++; adj.left += want.left - b.left; adj.top += want.top - b.top; adj.right += want.right - b.right; adj.bottom += want.bottom - b.bottom }
+                            relaunchFloat(pk, adjusted(want))
+                        }
                     } else drift = 0
                 }
             } catch (e: Exception) { }
-            lockHandler.postDelayed(this, 2500)
+            lockHandler.postDelayed(this, 900)
         }
     }
     private fun relaunchFloat(pk: String, r: android.graphics.Rect) {
@@ -314,10 +359,11 @@ class MainActivity : Activity() {
     /** Leaving the hub: the floating Maps window steps back with it. */
     @Volatile var lastOutLaunch = 0L
     private fun ev(msg: String) { MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
-    override fun onStop() { super.onStop(); ev("hub left view" + (if (floatPkg.isNotEmpty()) ", tucking Maps" else "")); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
+    override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); ev("hub left view" + (if (floatPkg.isNotEmpty()) ", tucking Maps" else "")); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
     /** Back in the hub (Home pressed): bring the Maps window back into its pane. */
     override fun onStart() {
         super.onStart()
+        hubStarted = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 1500)
         val pk = tuckedPkg; val r = floatRect
         val justLaunched = SystemClock.elapsedRealtime() - lastOutLaunch < 5000
         ev("hub back in view" + (if (pk.isNotEmpty()) (if (justLaunched) ", skipped Maps (app just opened)" else ", bringing Maps back") else ""))
@@ -325,11 +371,11 @@ class MainActivity : Activity() {
             tuckedPkg = ""
             main.postDelayed({ try {
                 val i = packageManager.getLaunchIntentForPackage(pk)
-                if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(r); startActivity(i, o.toBundle()) }
+                if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(adjusted(r)); startActivity(i, o.toBundle()) }
             } catch (e: Exception) { } }, 500)
         }
     }
-    override fun onPause() { visible = false; lockHandler.removeCallbacks(lockTick); stopViz(); stopLoc(); super.onPause() }
+    override fun onPause() { visible = false; stopViz(); stopLoc(); super.onPause() }
 
     /** Tries three ways to get the hub back in front of the music app. */
     private fun bringHubToFront(id: Int) {
@@ -749,8 +795,9 @@ class MainActivity : Activity() {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             return try {
                 val o = android.app.ActivityOptions.makeBasic()
-                o.setLaunchBounds(android.graphics.Rect(l, t, r, b))
-                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = android.graphics.Rect(l, t, r, b); true
+                val want = android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }
+                o.setLaunchBounds(adjusted(want))
+                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; true
             } catch (e: Exception) { Ops.launchApp(this@MainActivity, pkg) }
         }
         @JavascriptInterface fun getAppInfo(json: String): String = try {
@@ -775,10 +822,13 @@ class MainActivity : Activity() {
             return try {
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?ll=$lat,$lon&navigate=yes") else Uri.parse("google.navigation:q=$lat,$lon&mode=d")
                 val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(android.graphics.Rect(l, t, r, b))
-                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = android.graphics.Rect(l, t, r, b); true
+                val o = android.app.ActivityOptions.makeBasic(); val want = android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
+                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; true
             } catch (e: Exception) { false }
         }
+        @JavascriptInterface fun setThemeHue(h: Int) { ringHue = h; }
+        @JavascriptInterface fun getAutoLog(): String = Ops.prefs(this@MainActivity).getString("autolog", "") ?: ""
+        @JavascriptInterface fun getFloatCal(): String = calLog
         @JavascriptInterface fun getHideBars(): Boolean = Ops.prefs(this@MainActivity).getBoolean("hide_bars", false)
         @JavascriptInterface fun setHideBars(on: Boolean) { Ops.prefs(this@MainActivity).edit().putBoolean("hide_bars", on).apply(); runOnUiThread { goImmersive() } }
         @JavascriptInterface fun cleanNow(): String { cleanCaches(true); return "Cleaning" }
