@@ -503,7 +503,8 @@ class MainActivity : Activity() {
                 val files = ArrayList<java.io.File>()
                 fun walk(f: java.io.File) { if (f.isDirectory) f.listFiles()?.forEach { walk(it) } else files.add(f) }
                 walk(cacheDir); externalCacheDir?.let { walk(it) }
-                val total = files.sumOf { it.length() }
+                var total = 0L
+                for (f in files) total += f.length()
                 val cutoff = System.currentTimeMillis() - 24L * 3600 * 1000
                 var freed = 0L
                 for (f in files.sortedBy { it.lastModified() }) {

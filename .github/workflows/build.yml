@@ -27,7 +27,12 @@ jobs:
           gradle-version: 8.7
 
       - name: Build
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          set +e
+          gradle assembleDebug --no-daemon --stacktrace > build.log 2>&1
+          rc=$?
+          grep -E "^e: |error:|What went wrong" -A2 build.log | head -20 | while IFS= read -r l; do echo "::error::$l"; done
+          exit $rc
 
       - name: Keep a copy with the build
         uses: actions/upload-artifact@v4
