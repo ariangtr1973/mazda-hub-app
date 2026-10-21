@@ -104,7 +104,8 @@ class NowPlayingService : NotificationListenerService() {
     private fun saveState(c: MediaController, m: MediaMetadata?, st: PlaybackState?) {
         val now = SystemClock.elapsedRealtime()
         if (now - lastSave < 4000) return
-        val title = m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: return
+        if (m == null) return
+        val title = m.getString(MediaMetadata.METADATA_KEY_TITLE) ?: m.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: return
         if (title.isBlank()) return
         lastSave = now
         val o = JSONObject()
