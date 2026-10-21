@@ -55,8 +55,9 @@ class MixService : AccessibilityService() {
 
     private fun tuck(pkg: String, round: Int) {
         val ws = windows ?: run { floatLog = "no window access"; return }
-        val mine = ws.firstOrNull { it.root?.packageName?.toString() == pkg } ?: run { floatLog = "round $round: $pkg window not on screen (already tucked away?)"; return }
+        val mine = ws.filter { it.root?.packageName?.toString() == pkg }.maxByOrNull { val q = Rect(); it.getBoundsInScreen(q); q.width() * q.height() } ?: run { floatLog = "round $round: $pkg window not on screen (already tucked away?)"; return }
         val b = Rect(); mine.getBoundsInScreen(b)
+        if (b.width() < 300 || b.height() < 150) { floatLog = "round $round: $pkg is already folded into its bubble"; return }
         val zone = Rect(b.left - 120, b.top - 160, b.right + 120, b.bottom + 60)
         val seen = ArrayList<String>()
         var hit: AccessibilityNodeInfo? = null
@@ -67,7 +68,7 @@ class MixService : AccessibilityService() {
             walk(r) { n ->
                 val t = label(n)
                 if (t.isNotEmpty() && labs.size < 6) labs.add(t.take(16))
-                if (hit == null && w.id != mine.id && Regex("(?i)(minimi[sz]e|close|dismiss|pop-?up|window)").containsMatchIn(t)) {
+                if (hit == null && w.id != mine.id && Regex("(?i)(minimi[sz]e|close|dismiss|hide|collapse|pop-?up|window)").containsMatchIn(t + "|" + (n.viewIdResourceName ?: ""))) {
                     val nb = Rect(); n.getBoundsInScreen(nb)
                     if (Rect.intersects(nb, zone)) hit = n
                 }
@@ -77,9 +78,10 @@ class MixService : AccessibilityService() {
         }
         val node = hit
         if (node != null && clickUp(node)) { floatLog = "round $round tapped " + label(node); return }
-        if (round < 2) {
-            // Samsung's pop-up handle sits just above the window: tap it to reveal its buttons, then look again
-            val path = android.graphics.Path(); path.moveTo(b.centerX().toFloat(), (b.top - 4).toFloat())
+        if (round < 4) {
+            // Samsung's pop-up handle sits just above the window: tap it (at a different height each round) to reveal its buttons, then look again
+            val off = intArrayOf(22, 34, 12, 28)[round]
+            val path = android.graphics.Path(); path.moveTo(b.centerX().toFloat(), Math.max(4, b.top - off).toFloat())
             dispatchGesture(android.accessibilityservice.GestureDescription.Builder().addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 80)).build(), null, null)
             h.postDelayed({ try { tuck(pkg, round + 1) } catch (e: Exception) { } }, 800)
         } else floatLog = "no minimize button. maps window [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "]. Windows: " + seen.joinToString(" / ")
