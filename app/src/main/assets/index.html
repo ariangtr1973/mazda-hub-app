@@ -624,6 +624,20 @@
   .time-big { font-size: clamp(3rem, 6.2cqw, 5rem) !important; }
   .timep { padding: 12px 14px !important; }
   .volrow { gap: 6px; } .volrow .kc { width: 56px !important; flex: none; } .volrow #drawer-btn { width: 74px !important; } .vbar { min-width: 60px !important; }
+
+  /* ---- v0.31: weather moved into the clock pane; the map pane takes all the room ---- */
+  .hub { padding: 6px !important; gap: 6px !important; grid-template-columns: minmax(0, 1fr) 330px !important; }
+  .swipe .tabs, .swipe .dots { display: none !important; }
+  .stack > .pane:nth-child(2) { display: none !important; }
+  .swipe .viewport { margin-top: 0 !important; }
+  .stack > .pane { padding: 6px !important; }
+  .media { height: 236px !important; }
+  .wxc { display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.28); flex: none; }
+  .wxc-ic { width: 54px; height: 54px; flex: none; } .wxc-ic svg { width: 100%; height: 100%; stroke: none; fill: none; overflow: visible; }
+  .wxc-t { display: flex; flex-direction: column; min-width: 0; } .wxc-t b { font-size: 2rem; font-weight: 300; line-height: 1; } .wxc-t span { font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wxc-s { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 0.82rem; color: var(--ink-soft); white-space: nowrap; font-weight: 500; }
+  .time-big { font-size: clamp(2.8rem, 5.4cqw, 4.4rem) !important; }
+  .time-wrap { flex: 1 1 0; }
 </style>
 
 <div class="bg" aria-hidden="true">
@@ -785,6 +799,11 @@
     <div class="time-wrap">
       <div class="time-big"><span id="clock-hm">12:00</span><span class="time-ampm" id="clock-ampm">AM</span></div>
       <div class="time-date" id="clock-date">---</div>
+    </div>
+    <div class="wxc" id="wxc" aria-label="Today's weather">
+      <div class="wxc-ic" id="wxc-ic"></div>
+      <div class="wxc-t"><b id="wxc-temp">--&deg;</b><span id="wxc-cond">Loading weather&hellip;</span></div>
+      <div class="wxc-s"><span id="wxc-hl"></span><span id="wxc-rw"></span></div>
     </div>
     <div class="volrow">
       <button class="kc" id="drawer-btn" aria-label="All apps"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.4"/><rect x="14" y="4" width="6" height="6" rx="1.4"/><rect x="4" y="14" width="6" height="6" rx="1.4"/><rect x="14" y="14" width="6" height="6" rx="1.4"/></svg><small>Apps</small></button>
@@ -1271,7 +1290,7 @@
   let pane = 0;
   let holdUntil = 0, lastFlip = Date.now();
   function showPane(i, auto) {
-    const np = Math.max(0, Math.min(1, i));
+    const np = 0;
     
     if (np !== pane) lastFlip = Date.now();
     pane = np;
@@ -1676,7 +1695,7 @@
   // Asks Android to open the navigation app sized to the map pane (works when freeform windows are on; otherwise opens normally).
   function launchInPane(pkg) {
     try {
-      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, r = { left: r0.left + 8, top: r0.top + 28, right: r0.right - 8, bottom: r0.bottom - 4 };
+      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, r = { left: r0.left + 4, top: r0.top + 14, right: r0.right - 4, bottom: r0.bottom - 4 };
       H().launchAppIn(pkg, Math.round(r.left * sx), Math.round(r.top * sx), Math.round(r.right * sx), Math.round(r.bottom * sx));
     } catch (e) { try { H().launchApp(pkg); } catch (x) { } }
   }
@@ -1974,6 +1993,12 @@
       $('wx-hum').textContent = Math.round(c.relative_humidity_2m) + '%';
       const hrs = j.hourly.time, ci = Math.max(0, hrs.findIndex(t => t >= c.time.slice(0, 13) + ':00'));
       $('wx-rain').textContent = (j.hourly.precipitation_probability[ci] || 0) + '%';
+      try {
+        $('wxc-ic').innerHTML = wxIcon(kind, night); $('wxc-temp').textContent = Math.round(c.temperature_2m) + '\u00b0';
+        $('wxc-cond').textContent = WXN[c.weather_code] || 'Weather';
+        $('wxc-hl').textContent = 'H ' + Math.round(j.daily.temperature_2m_max[0]) + '\u00b0  L ' + Math.round(j.daily.temperature_2m_min[0]) + '\u00b0';
+        $('wxc-rw').textContent = 'Rain ' + (j.hourly.precipitation_probability[ci] || 0) + '%  \u00b7  ' + Math.round(c.wind_speed_10m) + ' mph';
+      } catch (e) { }
       try { renderDays(j.daily); } catch (e) { }
       const box = $('wx-hours'); box.innerHTML = '';
       for (let k = 1; k <= 6; k++) {
@@ -2074,7 +2099,7 @@
       const a = apps[0]; if (!a) return false;
       const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1;
       let ok = false;
-      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round((r0.left + 8) * sx), Math.round((r0.top + 28) * sx), Math.round((r0.right - 8) * sx), Math.round((r0.bottom - 4) * sx)); } catch (e) { }
+      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round((r0.left + 4) * sx), Math.round((r0.top + 14) * sx), Math.round((r0.right - 4) * sx), Math.round((r0.bottom - 4) * sx)); } catch (e) { }
       if (!ok) return false;
       navPkg = a.id; addRecent(d); closeSheet(); toast('Navigating to ' + (d.name || 'destination') + ' in ' + a.name);
       return true;
