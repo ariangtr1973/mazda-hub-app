@@ -743,6 +743,15 @@ class MainActivity : Activity() {
             main.postDelayed({ if (id == runId) bringHubToFront(id) }, 7500)
         }
         @JavascriptInterface fun getVersion(): String = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "?" } catch (e: Exception) { "?" }
+        /** Starts turn-by-turn to a place in the navigation app, in the hub's map pane. */
+        @JavascriptInterface fun navigateIn(pkg: String, lat: Double, lon: Double, name: String, l: Int, t: Int, r: Int, b: Int): Boolean {
+            return try {
+                val uri = if (pkg == "com.waze") Uri.parse("waze://?ll=$lat,$lon&navigate=yes") else Uri.parse("google.navigation:q=$lat,$lon&mode=d")
+                val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(android.graphics.Rect(l, t, r, b))
+                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = android.graphics.Rect(l, t, r, b); true
+            } catch (e: Exception) { false }
+        }
         @JavascriptInterface fun getHideBars(): Boolean = Ops.prefs(this@MainActivity).getBoolean("hide_bars", false)
         @JavascriptInterface fun setHideBars(on: Boolean) { Ops.prefs(this@MainActivity).edit().putBoolean("hide_bars", on).apply(); runOnUiThread { goImmersive() } }
         @JavascriptInterface fun cleanNow(): String { cleanCaches(true); return "Cleaning" }

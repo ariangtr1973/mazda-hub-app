@@ -898,6 +898,7 @@
           <button class="srow" id="p-delay"><span>Wait before play</span><span class="st ok" id="s-delay"></span></button>
           <button class="srow" id="p-awake"><span>Keep screen on</span><span class="st" id="s-awake"></span></button>
           <details class="diag"><summary>Advanced</summary>
+            <button class="srow" id="p-navmode"><span>Where to? starts navigation in</span><span class="st" id="s-navmode"></span></button>
             <button class="srow" id="p-bars"><span>Full screen (hide Android Back / Home buttons)</span><span class="st" id="s-bars"></span></button>
             <button class="srow" id="p-clean"><span>Clean up memory and cache now</span><span class="st" id="s-clean">Run</span></button>
             <button class="srow" id="p-lite"><span>Lite mode (faster on older tablets)</span><span class="st" id="s-lite"></span></button>
@@ -1704,6 +1705,7 @@
       if (!c.notif) miss.push('allow now playing access'); if (!c.btPerm) miss.push('allow Bluetooth access'); if (!c.music) miss.push('pick a music app');
       const r = $('ready'); r.className = 'ready ' + (miss.length ? 'warn' : 'ok');
       r.textContent = miss.length ? 'Not ready for the car yet. Still to do: ' + miss.join(', ') + '.' : 'Ready. When ' + (c.carName || 'your car') + ' connects, the hub wakes, waits for the hotspot, starts your music and comes back.'; }
+    try { const hm = localStorage.getItem('hub-nav-mode') === 'hub'; $('s-navmode').textContent = hm ? 'Hub map' : 'Maps app'; } catch (e) { }
     try { const hb = H().getHideBars(); $('s-bars').textContent = hb ? 'On' : 'Off'; $('s-bars').className = 'st ' + (hb ? 'ok' : ''); $('s-clean').textContent = H().getCleanStatus(); } catch (e) { }
     micOk = !!c.mic; stat('s-notif', c.notif); stat('s-a11y', c.a11y); stat('s-mic', c.mic); stat('s-loc', c.loc);
     stat('s-overlay', c.overlay); stat('s-write', c.write); stat('s-battery', c.battery); stat('s-bt', c.btPerm);
@@ -1736,6 +1738,7 @@
   $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });
   $('p-awake').addEventListener('click', () => { $('awake-btn').click(); setTimeout(renderSetup, 150); });
   $('p-lite').addEventListener('click', () => { const on = !isLite(); liteOn(on); try { localStorage.setItem('hub-lite', on ? '1' : '0'); } catch (e) {} renderSetup(); });
+  $('p-navmode').addEventListener('click', () => { try { localStorage.setItem('hub-nav-mode', localStorage.getItem('hub-nav-mode') === 'hub' ? 'maps' : 'hub'); } catch (e) { } renderSetup(); });
   $('p-bars').addEventListener('click', () => { try { H().setHideBars(!H().getHideBars()); } catch (e) { } setTimeout(renderSetup, 300); });
   $('p-clean').addEventListener('click', () => { try { H().cleanNow(); toast('Cleaning up\u2026'); } catch (e) { } setTimeout(renderSetup, 1500); });
   $('p-test').addEventListener('click', () => { H().testAuto(); $('setup').classList.remove('open'); });
@@ -2048,6 +2051,7 @@
       try { const j = JSON.parse(r.body); return j.code === 'Ok' ? Nav.buildRoute(j) : null; } catch (e) { return null; }
     }
     async function start(d) {
+      if (NATIVE && !assign && handoffOn() && handoff(d)) return;
       if (!TM.has()) { toast('Waiting for your location…'); msg.textContent = 'Waiting for your location. Try again in a moment.'; return; }
       msg.textContent = 'Finding the route…';
       const rt = await fetchRoute(TM.pos(), [d.lat, d.lon]);
@@ -2058,6 +2062,17 @@
       TM.setRoute(rt.pts, [d.lat, d.lon]); TM.setZ(16); showPane(0, true);
       const r0 = trk.update(TM.pos()[0], TM.pos()[1], 0, 0); r0.say = null; ui(); banner(r0);
       say('Starting route to ' + (d.name || 'your destination') + '. ' + Nav.fmtDur(rt.dur) + ', ' + Nav.sayDist(rt.total) + '.');
+    }
+    function handoffOn() { try { return localStorage.getItem('hub-nav-mode') !== 'hub'; } catch (e) { return true; } }
+    function handoff(d) {
+      let apps = []; try { apps = JSON.parse(H().getNavApps()); } catch (e) { }
+      const a = apps[0]; if (!a) return false;
+      const r0 = document.querySelector('#swipe .viewport').getBoundingClientRect(), sx = window.devicePixelRatio || 1, ins = 6;
+      let ok = false;
+      try { ok = H().navigateIn(a.id, d.lat, d.lon, d.name || '', Math.round((r0.left + ins) * sx), Math.round((r0.top + ins) * sx), Math.round((r0.right - ins) * sx), Math.round((r0.bottom - ins) * sx)); } catch (e) { }
+      if (!ok) return false;
+      navPkg = a.id; addRecent(d); closeSheet(); toast('Navigating to ' + (d.name || 'destination') + ' in ' + a.name);
+      return true;
     }
     function stop(spoken) {
       route = null; trk = null; dest = null; ownNav = false; navigating = false; rerouting = false;
