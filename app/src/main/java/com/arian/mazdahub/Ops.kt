@@ -167,6 +167,9 @@ object Ops {
     }
 
     /** First installed music app that is not [skip], used when the chosen app is missing or fails. */
+    /** Apps that have a media session but are never the car music app. */
+    fun ignorable(pkg: String) = pkg.contains("anthropic") || pkg.contains("apps.maps") || pkg.contains("chrome") || pkg.startsWith("com.android.") || pkg.contains("assistant") || pkg.contains("com.google.android.googlequicksearchbox")
+
     fun fallbackApp(c: Context, skip: String?): String? {
         val arr = musicApps(c, false)
         for (n in 0 until arr.length()) {

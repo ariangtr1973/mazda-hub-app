@@ -260,7 +260,7 @@ class MainActivity : Activity() {
             say("Starting music\u2026")
             Ops.log(this, "Online. Opening your music app")
             val prefs = Ops.prefs(this)
-            val want = prefs.getString("music_pkg", "") ?: ""
+            val want = (prefs.getString("music_pkg", "") ?: "").let { if (Ops.ignorable(it)) "" else it }
             var used = if (want.isNotEmpty() && Ops.launchApp(this, want)) want else null
             if (used == null) {
                 val alt = Ops.fallbackApp(this, want)
@@ -300,8 +300,8 @@ class MainActivity : Activity() {
     private var ringView: android.view.View? = null
     @Volatile var calLog = ""
 
-    /** Pull the Maps window up a little and shorten it so it never covers the hub's bottom row. */
-    private fun target(r: android.graphics.Rect): android.graphics.Rect { val d = resources.displayMetrics.density; return android.graphics.Rect(r.left, r.top - (12 * d).toInt(), r.right, r.bottom - (34 * d).toInt()) }
+    /** Samsung keeps a handle bar above the window, so the window itself can never start above ~44 px. */
+    private fun target(r: android.graphics.Rect): android.graphics.Rect = android.graphics.Rect(r.left, Math.max(r.top, 44), r.right, r.bottom - 4)
     private fun adjusted(r0: android.graphics.Rect): android.graphics.Rect { val r = target(r0); return android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom) }
 
     private fun ringDrawable(): android.graphics.drawable.Drawable {
@@ -343,7 +343,7 @@ class MainActivity : Activity() {
                     if (ex > 16) {
                         if (++drift >= 2 && visible) {
                             drift = 0
-                            if (calib < 3) { calib++; val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom; if (Math.abs(dl) < 250 && Math.abs(dt) < 250 && Math.abs(dr) < 250 && Math.abs(db) < 250) { adj.left += dl; adj.top += dt; adj.right += dr; adj.bottom += db } else adj.set(0, 0, 0, 0) }
+                            if (calib < 3) { calib++; val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom; if (Math.abs(dl) < 60 && Math.abs(dt) < 60 && Math.abs(dr) < 60 && Math.abs(db) < 60) { adj.left += dl; adj.top += dt; adj.right += dr; adj.bottom += db } }
                             relaunchFloat(pk, adjusted(want0!!))
                         }
                     } else drift = 0

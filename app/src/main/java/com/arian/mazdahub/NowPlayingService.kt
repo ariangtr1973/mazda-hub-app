@@ -72,7 +72,7 @@ class NowPlayingService : NotificationListenerService() {
     private fun isPlaying(c: MediaController) = c.playbackState?.state == PlaybackState.STATE_PLAYING
 
     private fun pick(list: List<MediaController>?) {
-        val l = list ?: emptyList()
+        val l = (list ?: emptyList()).filter { !Ops.ignorable(it.packageName) }
         all = l
         // watch every session so an app that starts playing takes over the hub
         val live = l.map { it.packageName }.toSet()
@@ -88,7 +88,7 @@ class NowPlayingService : NotificationListenerService() {
             }
         }
         val prefs = Ops.prefs(this)
-        val want = prefs.getString("music_pkg", "") ?: ""
+        val want = (prefs.getString("music_pkg", "") ?: "").let { if (Ops.ignorable(it)) "" else it }
         val forced = if (forcePkg.isNotEmpty()) l.firstOrNull { it.packageName == forcePkg } else null
         val best = forced
             ?: l.filter { isPlaying(it) }.maxByOrNull { startedAt[it.packageName] ?: 0L }
