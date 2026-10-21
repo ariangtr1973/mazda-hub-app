@@ -50,28 +50,34 @@ class MixService : AccessibilityService() {
 
     private fun tuck(pkg: String, round: Int) {
         val ws = windows ?: run { floatLog = "no window access"; return }
-        val mine = ws.firstOrNull { it.root?.packageName?.toString() == pkg } ?: run { floatLog = "$pkg window not on screen"; return }
+        val mine = ws.firstOrNull { it.root?.packageName?.toString() == pkg } ?: run { floatLog = "round $round: $pkg window not on screen (already tucked away?)"; return }
         val b = Rect(); mine.getBoundsInScreen(b)
+        val zone = Rect(b.left - 120, b.top - 160, b.right + 120, b.bottom + 60)
         val seen = ArrayList<String>()
         var hit: AccessibilityNodeInfo? = null
         for (w in ws) {
             val r = w.root ?: continue
+            val wb = Rect(); w.getBoundsInScreen(wb)
+            val labs = ArrayList<String>()
             walk(r) { n ->
-                val t = label(n); if (t.isNotEmpty() && seen.size < 30) seen.add((r.packageName?.toString() ?: "?").substringAfterLast('.') + ":" + t.take(20))
-                if (hit == null && Regex("(?i)(minimi[sz]e|close|dismiss)").containsMatchIn(t) && w.id != mine.id) {
+                val t = label(n)
+                if (t.isNotEmpty() && labs.size < 6) labs.add(t.take(16))
+                if (hit == null && w.id != mine.id && Regex("(?i)(minimi[sz]e|close|dismiss|pop-?up|window)").containsMatchIn(t)) {
                     val nb = Rect(); n.getBoundsInScreen(nb)
-                    if (Rect.intersects(nb, Rect(b.left - 80, b.top - 120, b.right + 80, b.bottom + 40))) hit = n
+                    if (Rect.intersects(nb, zone)) hit = n
                 }
             }
+            val pk = (r.packageName?.toString() ?: "?").substringAfterLast('.')
+            if (pk != "clockpackage") seen.add(pk + "[" + wb.left + "," + wb.top + "," + wb.right + "," + wb.bottom + "]" + labs.joinToString("|"))
         }
         val node = hit
-        if (node != null && clickUp(node)) { floatLog = "tapped " + label(node); return }
-        if (round == 0) {
-            // reveal the pop-up handle by tapping its top edge, then look again
-            val path = android.graphics.Path(); path.moveTo(b.centerX().toFloat(), (b.top + 8).toFloat())
+        if (node != null && clickUp(node)) { floatLog = "round $round tapped " + label(node); return }
+        if (round < 2) {
+            // Samsung's pop-up handle sits just above the window: tap it to reveal its buttons, then look again
+            val path = android.graphics.Path(); path.moveTo(b.centerX().toFloat(), (b.top - 4).toFloat())
             dispatchGesture(android.accessibilityservice.GestureDescription.Builder().addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 80)).build(), null, null)
-            h.postDelayed({ try { tuck(pkg, 1) } catch (e: Exception) { } }, 700)
-        } else floatLog = "no minimize button found. Saw: " + seen.joinToString(" / ")
+            h.postDelayed({ try { tuck(pkg, round + 1) } catch (e: Exception) { } }, 800)
+        } else floatLog = "no minimize button. maps window [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "]. Windows: " + seen.joinToString(" / ")
     }
 
     private fun walk(n: AccessibilityNodeInfo?, f: (AccessibilityNodeInfo) -> Unit) {
