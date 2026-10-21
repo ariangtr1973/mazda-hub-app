@@ -334,7 +334,8 @@ class MainActivity : Activity() {
         override fun run() {
             try {
                 val pk = floatPkg; val want0 = floatRect; val want = if (want0 != null) target(want0) else null
-                val b = if (pk.isNotEmpty()) MixService.inst?.floatBounds(pk) else null
+                val b0 = if (pk.isNotEmpty()) MixService.inst?.floatBounds(pk) else null
+                val b = if (b0 != null && want != null && b0.width() > want.width() * 0.6 && b0.height() > want.height() * 0.6) b0 else null
                 updateRing(b)
                 if (hubStarted && b != null && want != null) {
                     val ex = Math.abs(b.left - want.left) + Math.abs(b.top - want.top) + Math.abs(b.right - want.right) + Math.abs(b.bottom - want.bottom)
@@ -342,7 +343,7 @@ class MainActivity : Activity() {
                     if (ex > 16) {
                         if (++drift >= 2 && visible) {
                             drift = 0
-                            if (calib < 3) { calib++; adj.left += want.left - b.left; adj.top += want.top - b.top; adj.right += want.right - b.right; adj.bottom += want.bottom - b.bottom }
+                            if (calib < 3) { calib++; val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom; if (Math.abs(dl) < 250 && Math.abs(dt) < 250 && Math.abs(dr) < 250 && Math.abs(db) < 250) { adj.left += dl; adj.top += dt; adj.right += dr; adj.bottom += db } else adj.set(0, 0, 0, 0) }
                             relaunchFloat(pk, adjusted(want0!!))
                         }
                     } else drift = 0

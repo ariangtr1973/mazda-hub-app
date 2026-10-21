@@ -44,7 +44,7 @@ class MixService : AccessibilityService() {
 
     /** Where the floating window for this app currently is, or null if it is not on screen. */
     fun floatBounds(pkg: String): Rect? = try {
-        windows?.firstOrNull { it.root?.packageName?.toString() == pkg }?.let { val r = Rect(); it.getBoundsInScreen(r); r }
+        windows?.filter { it.root?.packageName?.toString() == pkg }?.map { val r = Rect(); it.getBoundsInScreen(r); r }?.maxByOrNull { it.width() * it.height() }
     } catch (e: Exception) { null }
 
     /** When the user leaves the hub, tuck away the floating navigation window so it does not cover other apps. */
