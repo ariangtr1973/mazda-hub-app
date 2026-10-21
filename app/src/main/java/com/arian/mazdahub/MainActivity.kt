@@ -300,13 +300,15 @@ class MainActivity : Activity() {
     private var ringView: android.view.View? = null
     @Volatile var calLog = ""
 
-    private fun adjusted(r: android.graphics.Rect) = android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom)
+    /** Pull the Maps window up a little and shorten it so it never covers the hub's bottom row. */
+    private fun target(r: android.graphics.Rect): android.graphics.Rect { val d = resources.displayMetrics.density; return android.graphics.Rect(r.left, r.top - (12 * d).toInt(), r.right, r.bottom - (34 * d).toInt()) }
+    private fun adjusted(r0: android.graphics.Rect): android.graphics.Rect { val r = target(r0); return android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom) }
 
     private fun ringDrawable(): android.graphics.drawable.Drawable {
-        val accent = android.graphics.Color.HSVToColor(floatArrayOf(ringHue.toFloat(), 0.72f, 0.98f))
+        val accent = android.graphics.Color.HSVToColor(floatArrayOf(ringHue.toFloat(), 0.72f, 1f))
         val dm = resources.displayMetrics.density
         val outer = android.graphics.drawable.GradientDrawable().apply { setColor(android.graphics.Color.TRANSPARENT); setStroke((9 * dm).toInt(), android.graphics.Color.parseColor("#F2070B12")); cornerRadius = 16 * dm }
-        val inner = android.graphics.drawable.GradientDrawable().apply { setColor(android.graphics.Color.TRANSPARENT); setStroke((2 * dm).toInt().coerceAtLeast(2), accent); cornerRadius = 12 * dm }
+        val inner = android.graphics.drawable.GradientDrawable().apply { setColor(android.graphics.Color.TRANSPARENT); setStroke((3 * dm).toInt().coerceAtLeast(3), accent); cornerRadius = 12 * dm }
         return android.graphics.drawable.LayerDrawable(arrayOf(outer, inner)).also { it.setLayerInset(1, (3 * dm).toInt(), (3 * dm).toInt(), (3 * dm).toInt(), (3 * dm).toInt()) }
     }
 
@@ -331,7 +333,7 @@ class MainActivity : Activity() {
     private val lockTick = object : Runnable {
         override fun run() {
             try {
-                val pk = floatPkg; val want = floatRect
+                val pk = floatPkg; val want0 = floatRect; val want = if (want0 != null) target(want0) else null
                 val b = if (pk.isNotEmpty()) MixService.inst?.floatBounds(pk) else null
                 updateRing(b)
                 if (hubStarted && b != null && want != null) {
@@ -341,7 +343,7 @@ class MainActivity : Activity() {
                         if (++drift >= 2 && visible) {
                             drift = 0
                             if (calib < 3) { calib++; adj.left += want.left - b.left; adj.top += want.top - b.top; adj.right += want.right - b.right; adj.bottom += want.bottom - b.bottom }
-                            relaunchFloat(pk, adjusted(want))
+                            relaunchFloat(pk, adjusted(want0!!))
                         }
                     } else drift = 0
                 }
