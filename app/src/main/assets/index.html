@@ -575,6 +575,37 @@
   .sb .bolt { height: 18px; width: 14px; }
   .stack > .pane { padding-right: 34px; } .wx-pane { padding-right: 34px; } .wx-pane > * { min-width: 0; max-width: 100%; }
   .wx-now { padding-right: 4px; } .wx-hours > *, .wx-side .stat { min-width: 0; }
+
+  /* ---- v0.21 layout: media buttons in a 2x3 block on the left edge, favorites strip where they were ---- */
+  .media .controls { position: absolute !important; left: 16px; top: 14px; bottom: 14px; width: 186px; display: grid !important; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, 1fr); gap: 10px !important; align-items: stretch; z-index: 3; }
+  .media .controls .cbtn, .media .controls .mix { width: auto !important; height: auto !important; min-height: 0; border-radius: 20px !important; padding: 0 !important; gap: 4px !important; flex-direction: column; justify-content: center; align-items: center; }
+  .media .controls .cbtn svg, .media .controls .mix svg { width: 34px !important; height: 34px !important; }
+  .media .controls .cbtn .cap, .media .controls .mix span { font-size: 0.62rem !important; letter-spacing: 0.12em !important; line-height: 1.1; text-align: center; text-transform: uppercase; font-weight: 600; white-space: normal; color: #fff; }
+  .media .controls .mix { border: 1px solid rgba(255,255,255,0.3); background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04)); display: flex; }
+  .media .controls .mix.on { border-color: var(--accent); }
+  .media .controls .cbtn.big { border-width: 2px; }
+  .media .wavewrap { left: 220px !important; right: 20px !important; }
+  .media .mrow { left: 220px !important; right: 20px !important; gap: 18px !important; align-items: flex-end; }
+  .media .art { width: 160px; height: 160px; }
+  .media .np-meta { flex: 0 0 250px !important; align-self: stretch; justify-content: flex-end; }
+  .favs { flex: 1 1 0; min-width: 0; align-self: stretch; display: flex; flex-direction: column; gap: 6px; justify-content: flex-end; }
+  .favhead { display: flex; align-items: center; justify-content: space-between; font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+  .favedit { min-height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.08); color: #fff; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; }
+  .favedit.on { border-color: var(--accent); background: var(--accent-dim); }
+  .favstrip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 12px 10px 6px 10px; margin: -8px -4px 0; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; touch-action: pan-x; }
+  .favstrip::-webkit-scrollbar { display: none; }
+  .fav { flex: none; width: 88px; height: 104px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.22); background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03)); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; scroll-snap-align: start; color: #fff; padding: 4px; }
+  .fav:active { background: var(--accent-faint); border-color: var(--accent); }
+  .fav img { width: 56px; height: 56px; border-radius: 14px; }
+  .fav .fn { font-size: 0.68rem; font-weight: 500; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
+  .fav.add { border-style: dashed; color: var(--accent); font-size: 2.2rem; font-weight: 200; }
+  .fav .rm, .fav .mv { position: absolute; top: -6px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.5); background: #1b1f2a; color: #fff; font-size: 1rem; display: none; align-items: center; justify-content: center; padding: 0; }
+  .fav .rm { right: -6px; background: #b3243a; } .fav .mv { left: -6px; }
+  .editing .fav .rm, .editing .fav .mv { display: flex; }
+  .editing .fav:not(.add) { animation: wob 0.5s ease-in-out infinite alternate; }
+  @keyframes wob { from { transform: rotate(-1.2deg); } to { transform: rotate(1.2deg); } }
+  .favempty { color: var(--ink-dim); font-size: 0.85rem; align-self: center; }
+  .navapp.inpane { border-color: var(--accent); }
 </style>
 
 <div class="bg" aria-hidden="true">
@@ -752,6 +783,21 @@
 
   <section class="glass media" aria-label="Now playing">
     <div class="wavewrap" id="wavewrap"><canvas id="wave" aria-hidden="true"></canvas></div>
+    <div class="controls">
+        <button class="cbtn bad" id="btn-dislike" aria-label="Dislike" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M17 3H7.5a2 2 0 0 0-1.9 1.4L3 12.5V14a2 2 0 0 0 2 2h5.5l-.8 3.8a1.6 1.6 0 0 0 2.9 1.2L17 14zM17 3h3v11h-3"/></svg>
+        <span class="cap">Dislike</span></button>
+        <button class="cbtn" id="btn-like" aria-label="Like" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M7 21H4V10h3zM7 10l3.5-7.2A1.7 1.7 0 0 1 14 3.8L13 9h6a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 17.6 20H7"/></svg>
+        <span class="cap">Like</span></button>
+        <button class="cbtn" id="btn-prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><span class="cap">Back</span></button>
+        <button class="cbtn" id="btn-next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg><span class="cap">Next</span></button>
+        <button class="cbtn big" id="btn-play" aria-label="Play or pause"><svg id="play-icon" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span class="cap" id="play-cap">Pause</span></button>
+        <button class="mix" id="btn-mix">
+        <svg viewBox="0 0 24 24"><path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>
+        <span>Start mix</span>
+      </button>
+    </div>
     <div class="mrow">
       <div class="art" id="art" role="img" aria-label="Album art"></div>
       <div class="np-meta">
@@ -760,21 +806,10 @@
         <div class="np-artist" id="np-artist">Neon Voyager</div>
         <div class="times"><span id="np-cur">0:00</span> / <span id="np-dur">3:35</span></div>
       </div>
-      <div class="controls">
-        <button class="cbtn bad" id="btn-dislike" aria-label="Dislike" aria-pressed="false">
-          <svg viewBox="0 0 24 24"><path d="M17 3H7.5a2 2 0 0 0-1.9 1.4L3 12.5V14a2 2 0 0 0 2 2h5.5l-.8 3.8a1.6 1.6 0 0 0 2.9 1.2L17 14zM17 3h3v11h-3"/></svg>
-        <span class="cap">Dislike</span></button>
-        <button class="cbtn" id="btn-prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><span class="cap">Back</span></button>
-        <button class="cbtn big" id="btn-play" aria-label="Play or pause"><svg id="play-icon" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span class="cap" id="play-cap">Pause</span></button>
-        <button class="cbtn" id="btn-next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg><span class="cap">Next</span></button>
-        <button class="cbtn" id="btn-like" aria-label="Like" aria-pressed="false">
-          <svg viewBox="0 0 24 24"><path d="M7 21H4V10h3zM7 10l3.5-7.2A1.7 1.7 0 0 1 14 3.8L13 9h6a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 17.6 20H7"/></svg>
-        <span class="cap">Like</span></button>
+      <div class="favs" id="favs" aria-label="Favorite apps">
+        <div class="favhead"><span>Favorites</span><button class="favedit" id="fav-edit">Edit</button></div>
+        <div class="favstrip" id="fav-strip"></div>
       </div>
-      <button class="mix" id="btn-mix">
-        <svg viewBox="0 0 24 24"><path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>
-        <span>Start mix</span>
-      </button>
     </div>
   </section>
 
@@ -849,6 +884,8 @@
           <button class="srow" id="p-delay"><span>Wait before play</span><span class="st ok" id="s-delay"></span></button>
           <button class="srow" id="p-awake"><span>Keep screen on</span><span class="st" id="s-awake"></span></button>
           <details class="diag"><summary>Advanced</summary>
+            <button class="srow" id="p-bars"><span>Full screen (hide Android Back / Home buttons)</span><span class="st" id="s-bars"></span></button>
+            <button class="srow" id="p-clean"><span>Clean up memory and cache now</span><span class="st" id="s-clean">Run</span></button>
             <button class="srow" id="p-lite"><span>Lite mode (faster on older tablets)</span><span class="st" id="s-lite"></span></button>
             <button class="srow" id="p-test"><span>Test auto start now</span><span class="st">Run</span></button>
             <div class="autoline" id="autoline"></div></details>
@@ -1616,8 +1653,17 @@
     micOk = micOk;
   }
   let navPkg = '', navigating = false, ownNav = false;
+  // Asks Android to open the navigation app sized to the map pane (works when freeform windows are on; otherwise opens normally).
+  function launchInPane(pkg) {
+    try {
+      const r = $('map').getBoundingClientRect(), sx = window.devicePixelRatio || 1;
+      H().launchAppIn(pkg, Math.round(r.left * sx), Math.round(r.top * sx), Math.round(r.right * sx), Math.round(r.bottom * sx));
+    } catch (e) { try { H().launchApp(pkg); } catch (x) { } }
+  }
+  let navAppsAt = 0;
   function loadNavApps() {
     if (!NATIVE) return;
+    if (Date.now() - navAppsAt < 60000 && $('nav-apps').children.length) return; navAppsAt = Date.now();
     $('nav-mock').hidden = true; $('nav-real').hidden = false;
     let apps = []; try { apps = JSON.parse(H().getNavApps()); } catch (e) {}
     const box = $('nav-apps'); box.innerHTML = '';
@@ -1626,7 +1672,7 @@
       const b = document.createElement('button'); b.className = 'navapp';
       if (a.icon) { const im = document.createElement('img'); im.src = a.icon; im.alt = ''; b.append(im); }
       const sp = document.createElement('span'); sp.textContent = a.name; b.append(sp);
-      b.addEventListener('click', () => { navPkg = a.id; try { H().launchApp(a.id); } catch (e) {} });
+      b.addEventListener('click', () => { navPkg = a.id; launchInPane(a.id); });
       box.append(b);
     });
     let c = {}; try { c = JSON.parse(H().getSetup()); } catch (e) {}
@@ -1643,6 +1689,7 @@
       if (!c.notif) miss.push('allow now playing access'); if (!c.btPerm) miss.push('allow Bluetooth access'); if (!c.music) miss.push('pick a music app');
       const r = $('ready'); r.className = 'ready ' + (miss.length ? 'warn' : 'ok');
       r.textContent = miss.length ? 'Not ready for the car yet. Still to do: ' + miss.join(', ') + '.' : 'Ready. When ' + (c.carName || 'your car') + ' connects, the hub wakes, waits for the hotspot, starts your music and comes back.'; }
+    try { const hb = H().getHideBars(); $('s-bars').textContent = hb ? 'On' : 'Off'; $('s-bars').className = 'st ' + (hb ? 'ok' : ''); $('s-clean').textContent = H().getCleanStatus(); } catch (e) { }
     micOk = !!c.mic; stat('s-notif', c.notif); stat('s-a11y', c.a11y); stat('s-mic', c.mic); stat('s-loc', c.loc);
     stat('s-overlay', c.overlay); stat('s-write', c.write); stat('s-battery', c.battery); stat('s-bt', c.btPerm);
     $('s-auto').textContent = c.auto ? 'On' : 'Off'; $('s-auto').className = 'st ' + (c.auto ? 'ok' : '');
@@ -1674,6 +1721,8 @@
   $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });
   $('p-awake').addEventListener('click', () => { $('awake-btn').click(); setTimeout(renderSetup, 150); });
   $('p-lite').addEventListener('click', () => { const on = !isLite(); liteOn(on); try { localStorage.setItem('hub-lite', on ? '1' : '0'); } catch (e) {} renderSetup(); });
+  $('p-bars').addEventListener('click', () => { try { H().setHideBars(!H().getHideBars()); } catch (e) { } setTimeout(renderSetup, 300); });
+  $('p-clean').addEventListener('click', () => { try { H().cleanNow(); toast('Cleaning up\u2026'); } catch (e) { } setTimeout(renderSetup, 1500); });
   $('p-test').addEventListener('click', () => { H().testAuto(); $('setup').classList.remove('open'); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('setup').classList.contains('open')) renderSetup(); });
   window.addEventListener('focus', () => { if ($('setup').classList.contains('open')) renderSetup(); });
@@ -1682,11 +1731,11 @@
   window.hub.setAwake = on => { wantAwake = !!on; lockScreen(); };
   if (NATIVE) {
     try { micOk = !!JSON.parse(H().getSetup()).mic; } catch (e) {}
-    loadNavApps();
+    setTimeout(loadNavApps, 1500);
     try { hub.setNow(JSON.parse(H().getNow())); hub.setNav(JSON.parse(H().getNav())); } catch (e) {}
     window.addEventListener('focus', () => { loadNavApps(); try { micOk = !!JSON.parse(H().getSetup()).mic; } catch (e) {} });
   }
-  if (NATIVE) { $('link-text').textContent = 'Mazda Hub app'; $('link-chip').classList.remove('mock'); loadNativeApps(); renderSource(); }
+  if (NATIVE) { $('link-text').textContent = 'Mazda Hub app'; $('link-chip').classList.remove('mock'); setTimeout(() => { loadNativeApps(); renderSource(); }, 600); }
 
 
   // ---------------------------------------------------------------
@@ -2113,12 +2162,13 @@
       if (a.icon) { mono.classList.add('has-img'); const im = document.createElement('img'); im.src = a.icon; im.alt = ''; mono.append(im); } else mono.textContent = a.name.slice(0, 2).toUpperCase();
       const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = a.name;
       b.append(mono, nm);
-      b.addEventListener('click', () => { try { H().launchApp(a.id); } catch (e) { } closeDrawer(); });
+      b.addEventListener('click', () => { if (FAV.picking()) { FAV.endPick(); FAV.add(a.id); closeDrawer(); toast(a.name + ' added to favorites'); return; } try { H().launchApp(a.id); } catch (e) { } closeDrawer(); });
       box.append(b);
     });
     $('drawer').classList.add('open');
+    try { $('drawer').querySelector('.sheet-sub') && 0; } catch (e) { }
   }
-  function closeDrawer() { $('drawer').classList.remove('open'); }
+  function closeDrawer() { $('drawer').classList.remove('open'); try { FAV.endPick(); } catch (e) { } }
   $('drawer-btn').addEventListener('click', openDrawer);
   $('drawer-close').addEventListener('click', closeDrawer);
   $('drawer').addEventListener('click', e => { if (e.target === $('drawer')) closeDrawer(); });
@@ -2178,6 +2228,52 @@
   $('sb-net').addEventListener('click', () => { if (NATIVE) { try { window.HubNative.openSetup('wifi'); } catch (e) { } } });
   $('sb-android').addEventListener('click', () => { if (NATIVE) { try { window.HubNative.openSetup('android'); } catch (e) { } } });
   paintStatus(); setInterval(paintStatus, 15000); window.addEventListener('focus', paintStatus);
+
+  // ---------- favorite apps (editable, scrollable) ----------
+  const FAV = (() => {
+    let list = [], info = {}, editing = false, pick = false;
+    try { list = JSON.parse(NATIVE ? (H().getFavs() || '[]') : (localStorage.getItem('hub-favs') || '[]')); } catch (e) { list = []; }
+    if (!Array.isArray(list)) list = [];
+    const strip = $('fav-strip');
+    function save() { const j = JSON.stringify(list); try { if (NATIVE) H().setFavs(j); else localStorage.setItem('hub-favs', j); } catch (e) { } }
+    function load() {
+      if (!NATIVE || !list.length) return;
+      try { JSON.parse(H().getAppInfo(JSON.stringify(list))).forEach(a => { info[a.id] = a; }); } catch (e) { }
+    }
+    function tile(id) {
+      const a = info[id]; if (!a) return null;
+      const b = document.createElement('div'); b.className = 'fav'; b.setAttribute('role', 'button'); b.tabIndex = 0;
+      if (a.icon) { const im = document.createElement('img'); im.src = a.icon; im.alt = ''; b.append(im); }
+      const n = document.createElement('div'); n.className = 'fn'; n.textContent = a.name; b.append(n);
+      const rm = document.createElement('button'); rm.className = 'rm'; rm.textContent = '\u2715'; rm.setAttribute('aria-label', 'Remove ' + a.name);
+      rm.addEventListener('click', e => { e.stopPropagation(); list = list.filter(x => x !== id); save(); render(); });
+      const mv = document.createElement('button'); mv.className = 'mv'; mv.textContent = '\u25C0'; mv.setAttribute('aria-label', 'Move ' + a.name + ' earlier');
+      mv.addEventListener('click', e => { e.stopPropagation(); const i = list.indexOf(id); if (i > 0) { list.splice(i - 1, 0, list.splice(i, 1)[0]); save(); render(); } });
+      b.append(mv, rm);
+      let lp = null, did = false;
+      b.addEventListener('pointerdown', () => { did = false; lp = setTimeout(() => { did = true; setEdit(true); }, 700); });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(lp)));
+      b.addEventListener('click', () => { if (did || editing) return; try { H().launchApp(id); } catch (e) { } });
+      return b;
+    }
+    function render() {
+      strip.innerHTML = '';
+      list.forEach(id => { const t = tile(id); if (t) strip.append(t); });
+      const add = document.createElement('div'); add.className = 'fav add'; add.setAttribute('role', 'button'); add.setAttribute('aria-label', 'Add favorite app'); add.textContent = '+';
+      add.addEventListener('click', () => { if (!NATIVE) { toast('Favorites work in the Mazda Hub app'); return; } pick = true; openDrawer(); });
+      strip.append(add);
+      $('favs').classList.toggle('editing', editing);
+      $('fav-edit').classList.toggle('on', editing); $('fav-edit').textContent = editing ? 'Done' : 'Edit';
+    }
+    function setEdit(on) { editing = on; render(); }
+    $('fav-edit').addEventListener('click', () => setEdit(!editing));
+    return {
+      init() { load(); if (!list.length && NATIVE) { try { const m = JSON.parse(H().getApps(false)).slice(0, 5).map(a => a.id); list = m; save(); load(); } catch (e) { } } render(); },
+      picking() { return pick; }, endPick() { pick = false; },
+      add(id) { if (!list.includes(id)) { list.push(id); save(); load(); } render(); setTimeout(() => { strip.scrollLeft = strip.scrollWidth; }, 60); }
+    };
+  })();
+  setTimeout(() => FAV.init(), NATIVE ? 1200 : 0);
 </script>
 
 </body>

@@ -137,6 +137,20 @@ object Ops {
         return JSONArray(out)
     }
 
+    /** Name + icon for just these packages (used by the favorites strip, so the whole app list is not loaded at startup). */
+    fun appInfo(c: Context, pkgs: List<String>): JSONArray {
+        val pm = c.packageManager
+        val out = JSONArray()
+        for (pkg in pkgs) {
+            try {
+                val ai = pm.getApplicationInfo(pkg, 0)
+                if (pm.getLaunchIntentForPackage(pkg) == null) continue
+                out.put(JSONObject().put("id", pkg).put("name", pm.getApplicationLabel(ai).toString()).put("icon", iconData(pm.getApplicationIcon(ai))))
+            } catch (e: Exception) { }
+        }
+        return out
+    }
+
     fun launchApp(c: Context, pkg: String): Boolean {
         val i = c.packageManager.getLaunchIntentForPackage(pkg) ?: return false
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

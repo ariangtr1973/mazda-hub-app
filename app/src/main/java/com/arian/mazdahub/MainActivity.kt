@@ -66,6 +66,7 @@ class MainActivity : Activity() {
         web.setBackgroundColor(Color.BLACK)
         setContentView(web)
         goImmersive()
+        houseHandler.postDelayed(houseTick, 25_000)
 
         with(web.settings) {
             javaScriptEnabled = true
@@ -468,22 +469,55 @@ class MainActivity : Activity() {
     }
     private fun pkgIsYt(c: android.media.session.MediaController) = c.packageName.contains("youtube")
 
-    /** Hide the status and navigation bars so the hub uses the whole screen (swipe from an edge to bring them back). */
+    /** Hides the status bar. The Android Back / Home / Recents bar stays visible unless "Full screen" is turned on in Settings. */
     private fun goImmersive() {
+        val hideNav = Ops.prefs(this).getBoolean("hide_bars", false)
         try {
             if (Build.VERSION.SDK_INT >= 30) {
-                window.setDecorFitsSystemWindows(false)
+                window.setDecorFitsSystemWindows(!hideNav)
                 window.insetsController?.let {
-                    it.hide(android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars())
+                    it.hide(android.view.WindowInsets.Type.statusBars())
+                    if (hideNav) it.hide(android.view.WindowInsets.Type.navigationBars()) else it.show(android.view.WindowInsets.Type.navigationBars())
                     it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 }
             } else {
                 @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = (android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                window.decorView.systemUiVisibility = if (hideNav) (android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+                else (android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN)
             }
         } catch (e: Exception) { }
+    }
+
+    // ---- housekeeping: keeps the hub light between drives ----
+    private val houseHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val cachePool = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var lastClean = "not run yet"
+
+    /** Trims the hub's own cache. [force] empties it; otherwise only files older than a day, or everything if over ~40 MB. */
+    fun cleanCaches(force: Boolean) {
+        try { if (force) web.clearCache(false) } catch (e: Exception) { }
+        cachePool.execute {
+            try {
+                val files = ArrayList<java.io.File>()
+                fun walk(f: java.io.File) { if (f.isDirectory) f.listFiles()?.forEach { walk(it) } else files.add(f) }
+                walk(cacheDir); externalCacheDir?.let { walk(it) }
+                val total = files.sumOf { it.length() }
+                val cutoff = System.currentTimeMillis() - 24L * 3600 * 1000
+                var freed = 0L
+                for (f in files.sortedBy { it.lastModified() }) {
+                    if (force || total > 40L * 1024 * 1024 || f.lastModified() < cutoff) { freed += f.length(); f.delete() }
+                }
+                lastClean = "freed " + (freed / 1024) + " KB at " + java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date())
+            } catch (e: Exception) { lastClean = "clean failed" }
+        }
+    }
+    private val houseTick = object : Runnable { override fun run() { cleanCaches(false); houseHandler.postDelayed(this, 6L * 3600 * 1000) } }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) { try { web.clearCache(false) } catch (e: Exception) { } cleanCaches(false) }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -664,6 +698,25 @@ class MainActivity : Activity() {
         @JavascriptInterface fun getApps(all: Boolean): String = try { Ops.musicApps(this@MainActivity, all).toString() } catch (e: Exception) { "[]" }
 
         @JavascriptInterface fun launchApp(pkg: String): Boolean = Ops.launchApp(this@MainActivity, pkg)
+        /** Opens an app asking Android to size its window to this box (screen pixels). Honoured only when freeform windows are enabled. */
+        @JavascriptInterface fun launchAppIn(pkg: String, l: Int, t: Int, r: Int, b: Int): Boolean {
+            val i = packageManager.getLaunchIntentForPackage(pkg) ?: return false
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return try {
+                val o = android.app.ActivityOptions.makeBasic()
+                o.setLaunchBounds(android.graphics.Rect(l, t, r, b))
+                startActivity(i, o.toBundle()); true
+            } catch (e: Exception) { Ops.launchApp(this@MainActivity, pkg) }
+        }
+        @JavascriptInterface fun getAppInfo(json: String): String = try {
+            val a = JSONArray(json); Ops.appInfo(this@MainActivity, (0 until a.length()).map { a.getString(it) }).toString()
+        } catch (e: Exception) { "[]" }
+        @JavascriptInterface fun getHideBars(): Boolean = Ops.prefs(this@MainActivity).getBoolean("hide_bars", false)
+        @JavascriptInterface fun setHideBars(on: Boolean) { Ops.prefs(this@MainActivity).edit().putBoolean("hide_bars", on).apply(); runOnUiThread { goImmersive() } }
+        @JavascriptInterface fun cleanNow(): String { cleanCaches(true); return "Cleaning" }
+        @JavascriptInterface fun getCleanStatus(): String = lastClean
+        @JavascriptInterface fun getFavs(): String = Ops.prefs(this@MainActivity).getString("favs", "") ?: ""
+        @JavascriptInterface fun setFavs(json: String) { Ops.prefs(this@MainActivity).edit().putString("favs", json).apply() }
 
         @JavascriptInterface fun mediaKey(name: String) {
             val c = NowPlayingService.controller
