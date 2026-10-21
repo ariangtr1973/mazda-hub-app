@@ -254,7 +254,8 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         js("window.hub&&hub.setAwake&&hub.setAwake(true)")
         say("Car connected. Waiting for the hotspot\u2026")
-        Ops.log(this, "Waiting for the hotspot / internet")
+        rebindListener()
+        Ops.log(this, "Waiting for the hotspot / internet. Now-playing listener " + (if (NowPlayingService.inst != null) "connected" else "NOT connected"))
         waitOnline(id, 180_000) {
             if (id != runId) return@waitOnline
             say("Starting music\u2026")
@@ -372,9 +373,14 @@ class MainActivity : Activity() {
     @Volatile var lastOutLaunch = 0L
     private fun ev(msg: String) { MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
     override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); ev("hub left view" + (if (floatPkg.isNotEmpty()) ", tucking Maps" else "")); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
+    /** After an update Android sometimes leaves the now-playing listener unbound; ask it to reconnect. */
+    private fun rebindListener() {
+        try { if (NowPlayingService.inst == null) android.service.notification.NotificationListenerService.requestRebind(android.content.ComponentName(this, NowPlayingService::class.java)) } catch (e: Exception) { }
+    }
     /** Back in the hub (Home pressed): bring the Maps window back into its pane. */
     override fun onStart() {
         super.onStart()
+        rebindListener()
         hubStarted = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 1500)
         val pk = tuckedPkg; val r = floatRect
         val justLaunched = SystemClock.elapsedRealtime() - lastOutLaunch < 5000

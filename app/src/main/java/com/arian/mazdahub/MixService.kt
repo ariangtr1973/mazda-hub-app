@@ -84,7 +84,36 @@ class MixService : AccessibilityService() {
             val path = android.graphics.Path(); path.moveTo(b.centerX().toFloat(), Math.max(4, b.top - off).toFloat())
             dispatchGesture(android.accessibilityservice.GestureDescription.Builder().addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 80)).build(), null, null)
             h.postDelayed({ try { tuck(pkg, round + 1) } catch (e: Exception) { } }, 800)
-        } else floatLog = "no minimize button. maps window [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "]. Windows: " + seen.joinToString(" / ")
+        } else {
+            floatLog = "no minimize button. maps window [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "]. Windows: " + seen.joinToString(" / ") + " | closing it from Recents"
+            closeViaRecents(pkg)
+        }
+    }
+
+    /** Last resort, same as doing it by hand: open Recents, swipe the Maps card away, go back to the app you were in. */
+    private fun closeViaRecents(pkg: String) {
+        performGlobalAction(GLOBAL_ACTION_RECENTS)
+        h.postDelayed({
+            try {
+                var card: Rect? = null
+                for (w in windows ?: emptyList()) {
+                    val r = w.root ?: continue
+                    if (r.packageName?.toString() == pkg) continue
+                    walk(r) { n ->
+                        if (card == null && label(n).contains("maps", true)) {
+                            val nb = Rect(); n.getBoundsInScreen(nb)
+                            if (nb.width() > 200 && nb.height() > 150) card = nb
+                        }
+                    }
+                }
+                val c = card
+                if (c == null) { floatLog += " | no Maps card in Recents"; performGlobalAction(GLOBAL_ACTION_BACK); return@postDelayed }
+                val path = android.graphics.Path(); path.moveTo(c.centerX().toFloat(), c.centerY().toFloat()); path.lineTo(c.centerX().toFloat(), 0f)
+                dispatchGesture(android.accessibilityservice.GestureDescription.Builder().addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 260)).build(), null, null)
+                floatLog += " | swiped Maps away"
+                h.postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 900)
+            } catch (e: Exception) { floatLog += " | recents failed" }
+        }, 1500)
     }
 
     /** Taps the app's own Play / Resume button, as you would by hand. */
