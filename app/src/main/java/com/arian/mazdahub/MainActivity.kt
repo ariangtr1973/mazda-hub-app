@@ -286,7 +286,22 @@ class MainActivity : Activity() {
     private var visible = false
     override fun onResume() { super.onResume(); visible = true; startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
     @Volatile var floatPkg = ""
-    override fun onStop() { super.onStop(); if (floatPkg.isNotEmpty()) { MixService.inst?.minimizeFloating(floatPkg); floatPkg = "" } }
+    private var floatRect: android.graphics.Rect? = null
+    private var tuckedPkg = ""
+    /** Leaving the hub: the floating Maps window steps back with it. */
+    override fun onStop() { super.onStop(); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
+    /** Back in the hub (Home pressed): bring the Maps window back into its pane. */
+    override fun onStart() {
+        super.onStart()
+        val pk = tuckedPkg; val r = floatRect
+        if (pk.isNotEmpty() && r != null) {
+            tuckedPkg = ""
+            main.postDelayed({ try {
+                val i = packageManager.getLaunchIntentForPackage(pk)
+                if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(r); startActivity(i, o.toBundle()) }
+            } catch (e: Exception) { } }, 500)
+        }
+    }
     override fun onPause() { visible = false; stopViz(); stopLoc(); super.onPause() }
 
     /** Tries three ways to get the hub back in front of the music app. */
@@ -708,7 +723,7 @@ class MainActivity : Activity() {
             return try {
                 val o = android.app.ActivityOptions.makeBasic()
                 o.setLaunchBounds(android.graphics.Rect(l, t, r, b))
-                startActivity(i, o.toBundle()); floatPkg = pkg; true
+                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = android.graphics.Rect(l, t, r, b); true
             } catch (e: Exception) { Ops.launchApp(this@MainActivity, pkg) }
         }
         @JavascriptInterface fun getAppInfo(json: String): String = try {
