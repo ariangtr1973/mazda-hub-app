@@ -289,12 +289,16 @@ class MainActivity : Activity() {
     private var floatRect: android.graphics.Rect? = null
     private var tuckedPkg = ""
     /** Leaving the hub: the floating Maps window steps back with it. */
-    override fun onStop() { super.onStop(); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
+    @Volatile var lastOutLaunch = 0L
+    private fun ev(msg: String) { MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
+    override fun onStop() { super.onStop(); ev("hub left view" + (if (floatPkg.isNotEmpty()) ", tucking Maps" else "")); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
     /** Back in the hub (Home pressed): bring the Maps window back into its pane. */
     override fun onStart() {
         super.onStart()
         val pk = tuckedPkg; val r = floatRect
-        if (pk.isNotEmpty() && r != null) {
+        val justLaunched = SystemClock.elapsedRealtime() - lastOutLaunch < 5000
+        ev("hub back in view" + (if (pk.isNotEmpty()) (if (justLaunched) ", skipped Maps (app just opened)" else ", bringing Maps back") else ""))
+        if (pk.isNotEmpty() && r != null && !justLaunched) {
             tuckedPkg = ""
             main.postDelayed({ try {
                 val i = packageManager.getLaunchIntentForPackage(pk)
@@ -715,7 +719,7 @@ class MainActivity : Activity() {
 
         @JavascriptInterface fun getApps(all: Boolean): String = try { Ops.musicApps(this@MainActivity, all).toString() } catch (e: Exception) { "[]" }
 
-        @JavascriptInterface fun launchApp(pkg: String): Boolean = Ops.launchApp(this@MainActivity, pkg)
+        @JavascriptInterface fun launchApp(pkg: String): Boolean { lastOutLaunch = SystemClock.elapsedRealtime(); return Ops.launchApp(this@MainActivity, pkg) }
         /** Opens an app asking Android to size its window to this box (screen pixels). Honoured only when freeform windows are enabled. */
         @JavascriptInterface fun launchAppIn(pkg: String, l: Int, t: Int, r: Int, b: Int): Boolean {
             val i = packageManager.getLaunchIntentForPackage(pkg) ?: return false
@@ -829,7 +833,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) { o.put("bat", 0); o.put("chg", false) }
             return o.toString()
         }
-        @JavascriptInterface fun getMixStatus(): String = (if (MixService.inst == null) "helper off" else "helper on") + ": " + MixService.status + " | Maps window: " + MixService.floatLog
+        @JavascriptInterface fun getMixStatus(): String = (if (MixService.inst == null) "helper off" else "helper on") + ": " + MixService.status + " | Maps window: " + MixService.floatLog + " | Events: " + MixService.events.joinToString(" ; ")
         @JavascriptInterface fun getTrackDebug(): String {
             val c = NowPlayingService.controller ?: return "no player"
             val m = c.metadata

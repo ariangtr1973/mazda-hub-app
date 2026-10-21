@@ -137,5 +137,6 @@ class MixService : AccessibilityService() {
         @Volatile var inst: MixService? = null
         @Volatile var status: String = "not used yet"
         @Volatile var floatLog: String = "not used yet"
+        @Volatile var events: List<String> = emptyList()
     }
 }
