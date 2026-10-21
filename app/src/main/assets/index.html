@@ -570,6 +570,7 @@
   .sb.net.on { color: #6dffb0; }
   .sb.bat svg:first-child { width: 36px; height: 20px; }
   .sb.bat.low { color: #ff6b6b; } .sb.bat.chg { color: #6dffb0; }
+  .sb.mapb img { width: 28px; height: 28px; border-radius: 7px; } .sb.mapb { font-size: 0.9rem; }
   .sb.ags svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 1.7; stroke-linejoin: round; }
   .sb.ags { min-width: 48px; justify-content: center; }
   .sb .bolt { height: 18px; width: 14px; }
@@ -772,6 +773,7 @@
   <section class="glass timep" aria-label="Time">
     <div class="statbar" id="statbar">
       <button class="sb net" id="sb-net" aria-label="Network status, tap for Wi-Fi settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="w3" d="M2.5 9a14 14 0 0 1 19 0"/><path class="w2" d="M5.6 12.4a9.6 9.6 0 0 1 12.8 0"/><path class="w1" d="M8.8 15.8a5 5 0 0 1 6.4 0"/><circle class="w0" cx="12" cy="19" r="1.5"/><path class="wx" d="M4 4l16 16"/></svg><span id="sb-net-t">--</span></button>
+      <button class="sb mapb" id="sb-maps" aria-label="Open navigation app" hidden><img id="sb-maps-ic" alt="Maps"></button>
       <button class="sb ags" id="sb-android" aria-label="Android settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 3a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 3h4l.4-3a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4z"/><circle cx="12.9" cy="12" r="3"/></svg></button>
       <div class="sb bat" id="sb-bat" aria-label="Battery"><svg viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="1" width="23" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="25" y="4.5" width="2.2" height="5" rx="1" fill="currentColor"/><rect id="sb-fill" x="2.8" y="2.8" width="0" height="8.4" rx="1.5" fill="currentColor"/></svg><span id="sb-bat-t">--%</span><svg class="bolt" id="sb-bolt" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="currentColor"/></svg></div>
     </div>
@@ -819,7 +821,7 @@
         <div class="times"><span id="np-cur">0:00</span> / <span id="np-dur">3:35</span></div>
       </div>
       <div class="favs" id="favs" aria-label="Favorite apps">
-        <div class="favhead"><span>Favorites</span><button class="favedit" id="fav-edit">Edit</button></div>
+        <div class="favhead"><span id="fav-title">Favorites</span><button class="favedit" id="fav-edit" hidden>Done</button></div>
         <div class="favstrip" id="fav-strip"></div>
       </div>
     </div>
@@ -1338,7 +1340,7 @@
       dur = o.dur || 0; anchorPos = o.pos || 0; anchorAt = performance.now(); pos = anchorPos;
       playing = !!o.playing; $('play-icon').innerHTML = playing ? PAUSE : PLAY; { const pc = $('play-cap'); if (pc) pc.textContent = playing ? 'Pause' : 'Play'; }
       $('np-dur').textContent = dur > 0 ? fmt(dur) : '';
-      const sv = CONFIG.sources.find(x => x.id === nowPkg); if (sv) $('np-src-name').textContent = 'Now playing \u00b7 ' + sv.name;
+      const sv = CONFIG.sources.find(x => x.id === nowPkg); if (sv) { if (sourceId !== nowPkg) { sourceId = nowPkg; try { localStorage.setItem('hub-source', nowPkg); } catch (e) { } try { renderApps(); } catch (e) { } } $('np-src-name').textContent = 'Now playing \u00b7 ' + sv.name; }
     },
     setNav(o) { renderNav(o); },
     mixDone(ok, msg) { toast(ok ? 'Mix started' : 'Mix failed: ' + String(msg).slice(0, 90)); },
@@ -1584,7 +1586,7 @@
     try { localStorage.setItem('hub-source', id); } catch (e) {}
     const src = srcById(id);
     renderSource(); renderApps();
-    if (NATIVE && id !== 'local') { try { window.HubNative.setMusic(id); } catch (e) {} }
+    if (NATIVE && id !== 'local') { try { window.HubNative.switchApp(id); } catch (e) { try { window.HubNative.setMusic(id); } catch (x) {} } }
     if (id === 'local') startLocal(); else stopLocal();
     if (id === 'local') toast('Playing from this tablet');
     else if (NATIVE) toast('Default player: ' + src.name);
@@ -1687,6 +1689,7 @@
       b.addEventListener('click', () => { navPkg = a.id; launchInPane(a.id); });
       box.append(b);
     });
+    if (apps.length) { const mb = $('sb-maps'); mb.hidden = false; $('sb-maps-ic').src = apps[0].icon || ''; mb.onclick = () => { navPkg = apps[0].id; launchInPane(apps[0].id); }; }
     let c = {}; try { c = JSON.parse(H().getSetup()); } catch (e) {}
   }
   $('nav-turn').addEventListener('click', () => { if (NATIVE && navPkg) { try { H().launchApp(navPkg); } catch (e) {} } });
@@ -2275,10 +2278,12 @@
       add.addEventListener('click', () => { if (!NATIVE) { toast('Favorites work in the Mazda Hub app'); return; } pick = true; openDrawer(); });
       strip.append(add);
       $('favs').classList.toggle('editing', editing);
-      $('fav-edit').classList.toggle('on', editing); $('fav-edit').textContent = editing ? 'Done' : 'Edit';
+      $('fav-edit').hidden = !editing; $('fav-title').textContent = editing ? 'Reorder or remove \u2022 tap + to add' : 'Favorites';
     }
     function setEdit(on) { editing = on; render(); }
-    $('fav-edit').addEventListener('click', () => setEdit(!editing));
+    $('fav-edit').addEventListener('click', () => setEdit(false));
+    $('fav-strip').addEventListener('pointerdown', e => { if (e.target === $('fav-strip')) { clearTimeout(window.__flp); window.__flp = setTimeout(() => setEdit(true), 700); } });
+    ['pointerup', 'pointercancel', 'pointermove'].forEach(ev => $('fav-strip').addEventListener(ev, () => clearTimeout(window.__flp)));
     return {
       init() { load(); if (!list.length && NATIVE) { try { const m = JSON.parse(H().getApps(false)).slice(0, 5).map(a => a.id); list = m; save(); load(); } catch (e) { } } render(); },
       picking() { return pick; }, endPick() { pick = false; },

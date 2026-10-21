@@ -56,12 +56,38 @@ class NowPlayingService : NotificationListenerService() {
         if (inst === this) inst = null
     }
 
+    private var all: List<MediaController> = emptyList()
+    private val watchers = HashMap<String, MediaController.Callback>()
+    private val startedAt = HashMap<String, Long>()
+    private var forcePkg = ""
+    private var lastSave = 0L
+
+    private fun isPlaying(c: MediaController) = c.playbackState?.state == PlaybackState.STATE_PLAYING
+
     private fun pick(list: List<MediaController>?) {
         val l = list ?: emptyList()
-        val want = Ops.prefs(this).getString("music_pkg", "") ?: ""
-        val best = l.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+        all = l
+        // watch every session so an app that starts playing takes over the hub
+        val live = l.map { it.packageName }.toSet()
+        watchers.keys.filter { it !in live }.forEach { watchers.remove(it) }
+        l.forEach { c ->
+            if (!watchers.containsKey(c.packageName)) {
+                val w = object : MediaController.Callback() {
+                    override fun onPlaybackStateChanged(state: PlaybackState?) {
+                        if (state?.state == PlaybackState.STATE_PLAYING) { startedAt[c.packageName] = SystemClock.elapsedRealtime(); if (c.packageName != current?.packageName) pick(all) }
+                    }
+                }
+                watchers[c.packageName] = w; try { c.registerCallback(w) } catch (e: Exception) { }
+            }
+        }
+        val prefs = Ops.prefs(this)
+        val want = prefs.getString("music_pkg", "") ?: ""
+        val forced = if (forcePkg.isNotEmpty()) l.firstOrNull { it.packageName == forcePkg } else null
+        val best = forced
+            ?: l.filter { isPlaying(it) }.maxByOrNull { startedAt[it.packageName] ?: 0L }
             ?: l.firstOrNull { it.packageName == want }
             ?: l.firstOrNull()
+        if (best != null && isPlaying(best) && best.packageName != want) prefs.edit().putString("music_pkg", best.packageName).apply()
         if (best?.sessionToken != current?.sessionToken) {
             current?.unregisterCallback(cb)
             current = best
@@ -70,6 +96,51 @@ class NowPlayingService : NotificationListenerService() {
         }
         controller = current
         push()
+    }
+
+    /** Makes this app's session the one the hub shows and controls. */
+    fun select(pkg: String) { forcePkg = pkg; pick(all.ifEmpty { try { msm?.getActiveSessions(cn) } catch (e: Exception) { null } }) ; forcePkg = "" }
+
+    private fun saveState(c: MediaController, m: MediaMetadata?, st: PlaybackState?) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastSave < 4000) return
+        val title = m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: return
+        if (title.isBlank()) return
+        lastSave = now
+        val o = JSONObject()
+        o.put("title", title)
+        o.put("artist", m.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "")
+        o.put("id", m.getString(MediaMetadata.METADATA_KEY_MEDIA_ID) ?: "")
+        o.put("dur", m.getLong(MediaMetadata.METADATA_KEY_DURATION))
+        var p = st?.position ?: 0L
+        if (st != null && st.state == PlaybackState.STATE_PLAYING) p += ((SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
+        o.put("pos", p)
+        Ops.prefs(this).edit().putString("last_" + c.packageName, o.toString()).apply()
+    }
+
+    /** Resume this app where it left off. Returns false when the app has no session yet (caller should open the app). */
+    fun resume(pkg: String): Boolean {
+        val sessions = try { msm?.getActiveSessions(cn) } catch (e: Exception) { null } ?: all
+        val c = sessions.firstOrNull { it.packageName == pkg } ?: return false
+        sessions.filter { it.packageName != pkg && isPlaying(it) }.forEach { try { it.transportControls.pause() } catch (e: Exception) { } }
+        select(pkg)
+        if (isPlaying(c)) return true
+        val t = c.transportControls
+        val hasTrack = !(c.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "").isBlank()
+        val saved = try { JSONObject(Ops.prefs(this).getString("last_$pkg", "") ?: "") } catch (e: Exception) { null }
+        val id = saved?.optString("id") ?: ""
+        if (hasTrack || id.isEmpty() || ((c.playbackState?.actions ?: 0L) and PlaybackState.ACTION_PLAY_FROM_MEDIA_ID) == 0L) t.play()
+        else {
+            t.playFromMediaId(id, null)
+            val pos = saved?.optLong("pos") ?: 0L; val dur = saved?.optLong("dur") ?: 0L; val title = saved?.optString("title") ?: ""
+            if (dur > 0 && pos > 5000 && pos < dur - 5000) {
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    val cur = controller
+                    if (cur != null && cur.packageName == pkg && (cur.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "") == title) cur.transportControls.seekTo(pos)
+                }, 2500)
+            }
+        }
+        return true
     }
 
     private fun push() {
@@ -102,6 +173,7 @@ class NowPlayingService : NotificationListenerService() {
                 artB64 = ""; lastArtKey = key
             }
             o.put("art", artB64)
+            try { saveState(c, m, st) } catch (e: Exception) { }
             val ri = ratingInfo(c, m, st)
             o.put("liked", ri.liked ?: JSONObject.NULL)
             o.put("canLike", ri.canLike); o.put("canDislike", ri.canDislike)

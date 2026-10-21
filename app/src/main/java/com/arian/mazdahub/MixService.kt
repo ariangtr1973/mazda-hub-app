@@ -42,6 +42,38 @@ class MixService : AccessibilityService() {
         }, if (ok) 1300 else 400)
     }
 
+    /** When the user leaves the hub, tuck away the floating navigation window so it does not cover other apps. */
+    fun minimizeFloating(pkg: String) {
+        floatLog = "looking for the $pkg window"
+        h.postDelayed({ try { tuck(pkg, 0) } catch (e: Exception) { floatLog = "failed: " + e.javaClass.simpleName } }, 700)
+    }
+
+    private fun tuck(pkg: String, round: Int) {
+        val ws = windows ?: run { floatLog = "no window access"; return }
+        val mine = ws.firstOrNull { it.root?.packageName?.toString() == pkg } ?: run { floatLog = "$pkg window not on screen"; return }
+        val b = Rect(); mine.getBoundsInScreen(b)
+        val seen = ArrayList<String>()
+        var hit: AccessibilityNodeInfo? = null
+        for (w in ws) {
+            val r = w.root ?: continue
+            walk(r) { n ->
+                val t = label(n); if (t.isNotEmpty() && seen.size < 30) seen.add((r.packageName?.toString() ?: "?").substringAfterLast('.') + ":" + t.take(20))
+                if (hit == null && Regex("(?i)(minimi[sz]e|close|dismiss)").containsMatchIn(t) && w.id != mine.id) {
+                    val nb = Rect(); n.getBoundsInScreen(nb)
+                    if (Rect.intersects(nb, Rect(b.left - 80, b.top - 120, b.right + 80, b.bottom + 40))) hit = n
+                }
+            }
+        }
+        val node = hit
+        if (node != null && clickUp(node)) { floatLog = "tapped " + label(node); return }
+        if (round == 0) {
+            // reveal the pop-up handle by tapping its top edge, then look again
+            val path = android.graphics.Path(); path.moveTo(b.centerX().toFloat(), (b.top + 8).toFloat())
+            dispatchGesture(android.accessibilityservice.GestureDescription.Builder().addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 80)).build(), null, null)
+            h.postDelayed({ try { tuck(pkg, 1) } catch (e: Exception) { } }, 700)
+        } else floatLog = "no minimize button found. Saw: " + seen.joinToString(" / ")
+    }
+
     private fun walk(n: AccessibilityNodeInfo?, f: (AccessibilityNodeInfo) -> Unit) {
         if (n == null) return
         f(n)
@@ -98,5 +130,6 @@ class MixService : AccessibilityService() {
     companion object {
         @Volatile var inst: MixService? = null
         @Volatile var status: String = "not used yet"
+        @Volatile var floatLog: String = "not used yet"
     }
 }

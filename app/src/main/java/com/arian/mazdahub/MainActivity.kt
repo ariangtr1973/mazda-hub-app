@@ -271,10 +271,10 @@ class MainActivity : Activity() {
             val delay = prefs.getInt("delay_s", 8) * 1000L
             main.postDelayed({
                 if (id != runId) return@postDelayed
-                if (!Ops.musicActive(this)) Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY)
+                if (!Ops.musicActive(this)) { if (NowPlayingService.inst?.resume(used) != true) Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY) }
                 main.postDelayed({
                     if (id != runId) return@postDelayed
-                    if (!Ops.musicActive(this)) Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY)
+                    if (!Ops.musicActive(this)) { if (NowPlayingService.inst?.resume(used) != true) Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY) }
                     // Back to the hub so the music keeps playing underneath it.
                     bringHubToFront(id)
                     say(if (Ops.musicActive(this)) "Playing" else "Music app opened. Press play if it is quiet.")
@@ -285,6 +285,8 @@ class MainActivity : Activity() {
 
     private var visible = false
     override fun onResume() { super.onResume(); visible = true; startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
+    @Volatile var floatPkg = ""
+    override fun onStop() { super.onStop(); if (floatPkg.isNotEmpty()) { MixService.inst?.minimizeFloating(floatPkg); floatPkg = "" } }
     override fun onPause() { visible = false; stopViz(); stopLoc(); super.onPause() }
 
     /** Tries three ways to get the hub back in front of the music app. */
@@ -706,12 +708,25 @@ class MainActivity : Activity() {
             return try {
                 val o = android.app.ActivityOptions.makeBasic()
                 o.setLaunchBounds(android.graphics.Rect(l, t, r, b))
-                startActivity(i, o.toBundle()); true
+                startActivity(i, o.toBundle()); floatPkg = pkg; true
             } catch (e: Exception) { Ops.launchApp(this@MainActivity, pkg) }
         }
         @JavascriptInterface fun getAppInfo(json: String): String = try {
             val a = JSONArray(json); Ops.appInfo(this@MainActivity, (0 until a.length()).map { a.getString(it) }).toString()
         } catch (e: Exception) { "[]" }
+        /** The user picked another music app: make the hub follow it and start it where it left off. */
+        @JavascriptInterface fun switchApp(pkg: String) {
+            Ops.prefs(this@MainActivity).edit().putString("music_pkg", pkg).apply()
+            val svc = NowPlayingService.inst
+            if (svc != null && svc.resume(pkg)) { say("Playing " + pkg.substringAfterLast('.')); return }
+            if (!Ops.launchApp(this@MainActivity, pkg)) return
+            val id = ++runId
+            for (d in longArrayOf(2500, 6000)) main.postDelayed({
+                if (id != runId || Ops.musicActive(this@MainActivity)) return@postDelayed
+                if (NowPlayingService.inst?.resume(pkg) != true) Ops.mediaKey(this@MainActivity, android.view.KeyEvent.KEYCODE_MEDIA_PLAY)
+            }, d)
+            main.postDelayed({ if (id == runId) bringHubToFront(id) }, 7500)
+        }
         @JavascriptInterface fun getHideBars(): Boolean = Ops.prefs(this@MainActivity).getBoolean("hide_bars", false)
         @JavascriptInterface fun setHideBars(on: Boolean) { Ops.prefs(this@MainActivity).edit().putBoolean("hide_bars", on).apply(); runOnUiThread { goImmersive() } }
         @JavascriptInterface fun cleanNow(): String { cleanCaches(true); return "Cleaning" }
@@ -789,7 +804,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) { o.put("bat", 0); o.put("chg", false) }
             return o.toString()
         }
-        @JavascriptInterface fun getMixStatus(): String = (if (MixService.inst == null) "helper off" else "helper on") + ": " + MixService.status
+        @JavascriptInterface fun getMixStatus(): String = (if (MixService.inst == null) "helper off" else "helper on") + ": " + MixService.status + " | Maps window: " + MixService.floatLog
         @JavascriptInterface fun getTrackDebug(): String {
             val c = NowPlayingService.controller ?: return "no player"
             val m = c.metadata
