@@ -24,7 +24,7 @@ class CarReceiver : BroadcastReceiver() {
             if (act == last && now - lastAt < 8000) return
             last = act; lastAt = now
         }
-        Ops.log(context, "Car $short")
+        Ops.log(context, "Car $short (hub was " + (if (MainActivity.live != null) "already running" else "asleep or closed, woken by Bluetooth") + ")")
         when (act) {
             BluetoothDevice.ACTION_ACL_CONNECTED -> Ops.onCarConnected(context)
             BluetoothDevice.ACTION_ACL_DISCONNECTED -> Ops.onCarDisconnected(context)

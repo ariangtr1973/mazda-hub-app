@@ -46,7 +46,7 @@ object Ops {
         try {
             val t = java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date())
             val old = (prefs(c).getString("autolog", "") ?: "").split("\n").filter { it.isNotBlank() }
-            prefs(c).edit().putString("autolog", (listOf("$t $msg") + old).take(14).joinToString("\n")).apply()
+            prefs(c).edit().putString("autolog", (listOf("$t $msg") + old).take(60).joinToString("\n")).apply()
         } catch (e: Exception) { }
     }
 

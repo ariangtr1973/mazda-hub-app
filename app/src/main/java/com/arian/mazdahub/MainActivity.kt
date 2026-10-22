@@ -256,10 +256,10 @@ class MainActivity : Activity() {
         say("Car connected. Waiting for the hotspot\u2026")
         rebindListener()
         Ops.log(this, "Waiting for the hotspot / internet. Now-playing listener " + (if (NowPlayingService.inst != null) "connected" else "NOT connected"))
-        waitOnline(id, 12_000) {
+        waitOnline(id, 180_000) {
             if (id != runId) return@waitOnline
             say("Starting music\u2026")
-            Ops.log(this, "Online. Opening your music app")
+            Ops.log(this, "Opening your music app")
             val prefs = Ops.prefs(this)
             val want = (prefs.getString("music_pkg", "") ?: "").let { if (Ops.ignorable(it)) "" else it }
             var used = if (want.isNotEmpty() && Ops.launchApp(this, want)) want else null
@@ -423,9 +423,31 @@ class MainActivity : Activity() {
     private fun waitOnline(id: Int, maxMs: Long, then: () -> Unit) {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         var done = false
-        fun go() { if (!done) { done = true; clearNet(); then() } }
+        val t0 = SystemClock.elapsedRealtime()
+        fun go() {
+            if (done) return
+            done = true; clearNet()
+            val s = (SystemClock.elapsedRealtime() - t0) / 1000
+            val online = cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+            Ops.log(this, if (online) "Internet ready after " + s + " s" else "Gave up waiting after " + s + " s, opening music anyway (offline)")
+            if (online) main.postDelayed({ if (id == runId) then() }, 2000) else then()
+        }
         val caps = cm.getNetworkCapabilities(cm.activeNetwork)
         if (caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) { go(); return }
+        // Countdown on screen and a progress line in the log while the phone's routine brings the hotspot up.
+        val tick = object : Runnable {
+            override fun run() {
+                if (done || id != runId) return
+                val s = (SystemClock.elapsedRealtime() - t0) / 1000
+                val wifiOn = try { (applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager).isWifiEnabled } catch (e: Exception) { true }
+                val c2 = cm.getNetworkCapabilities(cm.activeNetwork)
+                val state = if (!wifiOn) "Wi-Fi is OFF on the tablet" else if (c2 == null) "Wi-Fi on, no network yet" else "network found, no internet yet"
+                say(if (!wifiOn) "Turn Wi-Fi on. Waiting for the hotspot (" + s + " s)" else "Waiting for the hotspot (" + s + " s)")
+                if (s % 15L < 5L) Ops.log(this@MainActivity, "Still waiting at " + s + " s: " + state)
+                main.postDelayed(this, 5000)
+            }
+        }
+        main.postDelayed(tick, 5000)
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(n: Network, c: NetworkCapabilities) {
                 if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) main.post { if (id == runId) go() }
