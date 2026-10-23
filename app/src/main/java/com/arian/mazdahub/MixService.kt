@@ -116,6 +116,21 @@ class MixService : AccessibilityService() {
         }, 1500)
     }
 
+    /** What the app shows right now (clickable things only), so we can see what to tap. */
+    fun dumpLabels(pkg: String): String {
+        val out = ArrayList<String>()
+        try {
+            for (w in windows ?: return "no windows") {
+                val root = w.root ?: continue
+                if (root.packageName?.toString() != pkg) continue
+                walk(root) { n ->
+                    if (out.size < 40 && n.isClickable) { val l = label(n).take(22); if (l.isNotEmpty()) { val b = Rect(); n.getBoundsInScreen(b); out.add(l + "@" + b.centerX() + "," + b.centerY()) } }
+                }
+            }
+        } catch (e: Exception) { }
+        return if (out.isEmpty()) "nothing" else out.joinToString(" | ")
+    }
+
     /** Taps the app's own Play / Resume button, as you would by hand. */
     fun tapPlay(pkg: String): Boolean {
         var done = false

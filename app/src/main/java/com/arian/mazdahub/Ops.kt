@@ -39,6 +39,18 @@ object Ops {
         } catch (e: Exception) { }
     }
 
+    /** The same request Google Assistant sends for "play some music". */
+    fun playFromSearch(c: Context, pkg: String): String {
+        return try {
+            val saved = try { org.json.JSONObject(prefs(c).getString("last_$pkg", "") ?: "") } catch (e: Exception) { null }
+            val q = ((saved?.optString("title") ?: "") + " " + (saved?.optString("artist") ?: "")).trim()
+            val i = Intent("android.media.action.MEDIA_PLAY_FROM_SEARCH").setPackage(pkg)
+                .putExtra(android.app.SearchManager.QUERY, q).putExtra("android.intent.extra.focus", "vnd.android.cursor.item/*")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (i.resolveActivity(c.packageManager) == null) "app does not accept it" else { c.startActivity(i); "sent" + (if (q.isEmpty()) " (any music)" else " ($q)") }
+        } catch (e: Exception) { "failed: " + e.javaClass.simpleName }
+    }
+
     fun mediaKeyByName(c: Context, name: String) {
         val code = when (name) {
             "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
