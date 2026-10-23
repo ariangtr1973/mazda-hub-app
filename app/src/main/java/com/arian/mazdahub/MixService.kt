@@ -131,22 +131,26 @@ class MixService : AccessibilityService() {
         return if (out.isEmpty()) "nothing" else out.joinToString(" | ")
     }
 
-    /** Taps the app's own Play / Resume button, as you would by hand. */
-    fun tapPlay(pkg: String): Boolean {
-        var done = false
+    /** Taps what you would tap by hand: "Try again" if the app shows a loading error, otherwise its Play button. Returns what was tapped. */
+    fun tapPlay(pkg: String): String {
+        var tapped = ""
         try {
-            for (w in windows ?: return false) {
-                val root = w.root ?: continue
-                if (root.packageName?.toString() != pkg) continue
-                walk(root) { n ->
-                    if (!done) {
-                        val l = label(n).lowercase().trim('|', ' ')
-                        if (l == "play" || l == "play video" || l == "resume" || l == "play|play" || l.startsWith("play song")) { val nb = Rect(); n.getBoundsInScreen(nb); if (nb.centerY() > 480 && clickUp(n)) done = true }
+            for (pass in 0..1) {
+                if (tapped.isNotEmpty()) break
+                for (w in windows ?: return "") {
+                    val root = w.root ?: continue
+                    if (root.packageName?.toString() != pkg) continue
+                    walk(root) { n ->
+                        if (tapped.isEmpty()) {
+                            val l = label(n).lowercase().trim('|', ' ')
+                            val hit = if (pass == 0) l == "try again" else (l == "play" || l == "play video" || l == "resume" || l == "play|play" || l.startsWith("play song"))
+                            if (hit) { val nb = Rect(); n.getBoundsInScreen(nb); if ((pass == 0 || nb.centerY() > 480) && clickUp(n)) tapped = l }
+                        }
                     }
                 }
             }
         } catch (e: Exception) { }
-        return done
+        return tapped
     }
 
     private fun walk(n: AccessibilityNodeInfo?, f: (AccessibilityNodeInfo) -> Unit) {

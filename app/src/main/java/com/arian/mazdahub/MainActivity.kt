@@ -289,13 +289,14 @@ class MainActivity : Activity() {
                 else {
                     // A cold music app has no player yet: wake it the way a headset button or Android Auto would.
                     if (n == 1 || n == 7 || n == 13) { Ops.mediaKeyTo(this, usedPkg, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); Ops.log(this, "Try " + n + ": sent the Play button to " + usedPkg.substringAfterLast('.')) }
-                    if (n == 3 || n == 9) { Ops.log(this, "Try " + n + ": asked the app to play music (voice-search request): " + Ops.playFromSearch(this, usedPkg)) }
+                    if (n == 3 || n == 9 || n == 21) { Ops.log(this, "Try " + n + ": asked the app to play music (voice-search request): " + Ops.playFromSearch(this, usedPkg)) }
                     if (n == 10) { Ops.log(this, "On screen in the app: " + (MixService.inst?.dumpLabels(usedPkg) ?: "no accessibility")) }
                     if (n == 2 || n == 8 || n == 14) { val r = svc.wake(usedPkg); Ops.log(this, "Try " + n + ": woke the player service: " + r) }
                     how = when {
                         n < 4 -> if (svc.resume(usedPkg)) "resume" else "no player yet"
-                        n < 10 -> if (svc.playSaved(usedPkg)) "play last track by name" else "no player yet"
-                        else -> if (n % 4 == 2) { val tapped = MixService.inst?.tapPlay(usedPkg) ?: false; Ops.log(this, "Try " + n + ": Play tap " + (if (tapped) "done" else "nothing to tap")); if (tapped) "tapped Play in the app" else "no Play button found" } else { if (svc.resume(usedPkg)) "resume" else "no player yet" }
+                        n < 6 -> if (svc.playSaved(usedPkg)) "play last track by name" else "no player yet"
+                        n % 3 == 0 -> { val t = MixService.inst?.tapPlay(usedPkg) ?: ""; Ops.log(this, "Try " + n + ": tapped " + (if (t.isEmpty()) "nothing" else t)); "tap" }
+                        else -> if (svc.resume(usedPkg)) "resume" else "no player yet"
                     }
                 }
                 if (n % 4 == 0) Ops.log(this, "Try " + n + ": " + how)
