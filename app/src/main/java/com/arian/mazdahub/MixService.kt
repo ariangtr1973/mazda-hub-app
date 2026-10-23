@@ -131,20 +131,31 @@ class MixService : AccessibilityService() {
         return if (out.isEmpty()) "nothing" else out.joinToString(" | ")
     }
 
-    /** Taps what you would tap by hand: "Try again" if the app shows a loading error, otherwise its Play button. Returns what was tapped. */
+    private var seededAt = 0L
+    /** Taps what you would tap by hand: "Try again" on a loading error; if the player says "Nothing is playing", starts your first Speed dial tile; otherwise its Play button. Returns what was tapped. */
     fun tapPlay(pkg: String): String {
         var tapped = ""
         try {
-            for (pass in 0..1) {
+            val roots = ArrayList<AccessibilityNodeInfo>()
+            for (w in windows ?: return "") { val r = w.root ?: continue; if (r.packageName?.toString() == pkg) roots.add(r) }
+            var nothing = false
+            for (r in roots) walk(r) { n -> if (label(n).contains("nothing is playing", true)) nothing = true }
+            val fresh = SystemClock.elapsedRealtime() - seededAt < 25_000
+            for (pass in 0..2) {
                 if (tapped.isNotEmpty()) break
-                for (w in windows ?: return "") {
-                    val root = w.root ?: continue
-                    if (root.packageName?.toString() != pkg) continue
-                    walk(root) { n ->
+                if (pass == 1 && !(nothing && !fresh)) continue
+                for (r in roots) {
+                    walk(r) { n ->
                         if (tapped.isEmpty()) {
                             val l = label(n).lowercase().trim('|', ' ')
-                            val hit = if (pass == 0) l == "try again" else (l == "play" || l == "play video" || l == "resume" || l == "play|play" || l.startsWith("play song"))
-                            if (hit) { val nb = Rect(); n.getBoundsInScreen(nb); if ((pass == 0 || nb.centerY() > 480) && clickUp(n)) tapped = l }
+                            val nb = Rect(); n.getBoundsInScreen(nb)
+                            val hit = when (pass) {
+                                0 -> l == "try again"
+                                1 -> l.startsWith("liked music") && nb.centerY() > 200
+                                else -> l == "play" || l == "play video" || l == "resume" || l == "play|play" || l.startsWith("play song") ||
+                                    (fresh && (l == "play all" || l == "shuffle play" || l == "shuffle all" || l == "shuffle"))
+                            }
+                            if (hit && (pass != 2 || fresh || nb.centerY() > 480) && clickUp(n)) { tapped = l; if (pass == 1) seededAt = SystemClock.elapsedRealtime() }
                         }
                     }
                 }
