@@ -126,7 +126,7 @@ class MixService : AccessibilityService() {
                 walk(root) { n ->
                     if (!done) {
                         val l = label(n).lowercase().trim('|', ' ')
-                        if (l == "play" || l == "play video" || l == "resume" || l == "play|play" || l.startsWith("play song")) { if (clickUp(n)) done = true }
+                        if (l == "play" || l == "play video" || l == "resume" || l == "play|play" || l.startsWith("play song")) { val nb = Rect(); n.getBoundsInScreen(nb); if (nb.centerY() > 480 && clickUp(n)) done = true }
                     }
                 }
             }

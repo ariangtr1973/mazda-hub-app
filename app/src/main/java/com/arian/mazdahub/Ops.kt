@@ -29,6 +29,16 @@ object Ops {
         am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
     }
 
+    /** Send the Play button straight to one app, even if it is not running (like a headset button). */
+    fun mediaKeyTo(c: Context, pkg: String, code: Int) {
+        try {
+            for (a in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+                val i = Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg).putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(a, code))
+                c.sendBroadcast(i)
+            }
+        } catch (e: Exception) { }
+    }
+
     fun mediaKeyByName(c: Context, name: String) {
         val code = when (name) {
             "play" -> KeyEvent.KEYCODE_MEDIA_PLAY

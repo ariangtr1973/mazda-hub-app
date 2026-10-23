@@ -163,6 +163,33 @@ class NowPlayingService : NotificationListenerService() {
         return true
     }
 
+    private var browser: android.media.browse.MediaBrowser? = null
+    /** Connect to the music app's player service (as Android Auto does) so it creates its player, then ask it to play. */
+    fun wake(pkg: String): String {
+        try {
+            val si = packageManager.queryIntentServices(android.content.Intent("android.media.browse.MediaBrowserService").setPackage(pkg), 0).firstOrNull()?.serviceInfo ?: return "no player service found"
+            try { browser?.disconnect() } catch (e: Exception) { }
+            val h = android.os.Handler(android.os.Looper.getMainLooper())
+            val saved = try { JSONObject(Ops.prefs(this).getString("last_$pkg", "") ?: "") } catch (e: Exception) { null }
+            lateinit var mb: android.media.browse.MediaBrowser
+            mb = android.media.browse.MediaBrowser(this, ComponentName(pkg, si.name), object : android.media.browse.MediaBrowser.ConnectionCallback() {
+                override fun onConnected() {
+                    try {
+                        val mc = MediaController(this@NowPlayingService, mb.sessionToken)
+                        mc.transportControls.play()
+                        h.postDelayed({ try { if (!isPlayingPkg(pkg)) mc.transportControls.playFromSearch(((saved?.optString("title") ?: "") + " " + (saved?.optString("artist") ?: "")).trim(), null) } catch (e: Exception) { } }, 1500)
+                    } catch (e: Exception) { }
+                    h.postDelayed({ try { mb.disconnect() } catch (e: Exception) { } }, 12000)
+                }
+                override fun onConnectionFailed() { Ops.log(this@NowPlayingService, "Player service refused the connection") }
+            }, null)
+            browser = mb
+            mb.connect()
+            return "connecting"
+        } catch (e: Exception) { return "failed: " + e.javaClass.simpleName }
+    }
+    private fun isPlayingPkg(pkg: String): Boolean = try { msm?.getActiveSessions(cn)?.any { it.packageName == pkg && isPlaying(it) } == true } catch (e: Exception) { false }
+
     private fun push() {
         val c = current
         val o = JSONObject()

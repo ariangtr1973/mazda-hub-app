@@ -284,11 +284,17 @@ class MainActivity : Activity() {
                     bringHubToFront(id); Ops.log(this, "Music still silent after 40 tries. Back to the hub"); say("Music app opened. Press play if it is quiet."); return
                 }
                 val svc = NowPlayingService.inst
-                val how = when {
-                    svc == null -> { Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "no listener, media key" }
-                    n < 4 -> if (svc.resume(usedPkg)) "resume" else "no player yet"
-                    n < 10 -> if (svc.playSaved(usedPkg)) "play last track by name" else "no player yet"
-                    else -> { val tapped = MixService.inst?.tapPlay(usedPkg) ?: false; if (!tapped) svc.resume(usedPkg); if (tapped) "tapped Play in the app" else "no Play button found" }
+                var how: String
+                if (svc == null) { Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); how = "no listener, media key" }
+                else {
+                    // A cold music app has no player yet: wake it the way a headset button or Android Auto would.
+                    if (n == 1 || n == 7 || n == 13) { Ops.mediaKeyTo(this, usedPkg, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); Ops.log(this, "Try " + n + ": sent the Play button to " + usedPkg.substringAfterLast('.')) }
+                    if (n == 2 || n == 8 || n == 14) { val r = svc.wake(usedPkg); Ops.log(this, "Try " + n + ": woke the player service: " + r) }
+                    how = when {
+                        n < 4 -> if (svc.resume(usedPkg)) "resume" else "no player yet"
+                        n < 10 -> if (svc.playSaved(usedPkg)) "play last track by name" else "no player yet"
+                        else -> if (n % 4 == 2) { val tapped = MixService.inst?.tapPlay(usedPkg) ?: false; if (tapped) "tapped Play in the app" else "no Play button found" } else { if (svc.resume(usedPkg)) "resume" else "no player yet" }
+                    }
                 }
                 if (n % 4 == 0) Ops.log(this, "Try " + n + ": " + how)
                 main.postDelayed({ attempt(n + 1) }, 1500)
