@@ -1847,6 +1847,21 @@
   // ---- Voice commands: tap the clock, then speak ----
   function voiceSay(t) { toast(t); if (NATIVE) { try { H().speak(t); } catch (e) { } } }
   function clickEl(id) { const e = $(id); if (e) e.click(); }
+  // ---- tell the app where the map pane is, and fold the Maps window while any hub screen is open ----
+  function reportPane() {
+    if (!NATIVE) return;
+    try { const r = $('swipe').getBoundingClientRect(), d = window.devicePixelRatio || 1; H().setPane(Math.round(r.left * d), Math.round(r.top * d), Math.round(r.right * d), Math.round(r.bottom * d)); } catch (e) { }
+  }
+  window.addEventListener('resize', () => setTimeout(reportPane, 300));
+  setTimeout(reportPane, 1200); setInterval(reportPane, 2500);
+  (function () {
+    let wasOpen = false;
+    new MutationObserver(() => {
+      const now = !!document.querySelector('.picker.open');
+      if (now === wasOpen) return; wasOpen = now;
+      if (NATIVE) { try { now ? H().foldMaps() : H().unfoldMaps(); } catch (e) { } }
+    }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  })();
   window.hub.voiceState = () => toast('Listening\u2026 speak now');
   window.hub.voiceErr = c => {
     const net = 'Voice needs internet. Check Wi-Fi or the hotspot.', mic = 'Microphone is off for Mazda Hub. Allow it, then tap the clock again.';

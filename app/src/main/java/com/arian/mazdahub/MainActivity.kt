@@ -314,6 +314,8 @@ class MainActivity : Activity() {
     private val lockHandler = Handler(Looper.getMainLooper())
     private var drift = 0
     private var lastRelaunchAt = 0L
+    @Volatile private var paneRect: android.graphics.Rect? = null
+    @Volatile private var sheetOpen = false
     private val shieldViews = ArrayList<android.view.View>()
     @Volatile private var ringHue = 205
     private var ringView: android.view.View? = null
@@ -352,7 +354,7 @@ class MainActivity : Activity() {
     private fun updateShield(win: android.graphics.Rect?) {
         try {
             val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            if (win == null || !hubStarted || !Settings.canDrawOverlays(this)) { removeShield(); return }
+            if (win == null || !hubStarted || sheetOpen || !Settings.canDrawOverlays(this)) { removeShield(); return }
             val d = resources.displayMetrics.density
             val out = (8 * d).toInt(); val inn = (10 * d).toInt(); val top = (20 * d).toInt()
             val rects = listOf(
@@ -437,11 +439,18 @@ class MainActivity : Activity() {
     override fun startActivity(intent: Intent?, options: Bundle?) {
         val i = intent
         val target = i?.component?.packageName ?: i?.`package`
-        if (i != null && !folding && floatPkg.isNotEmpty() && target != floatPkg && target != packageName && mapsOnTop()) {
+        val np = if (!folding) floatingNavPkg() else ""
+        if (i != null && !folding && np.isNotEmpty() && target != np && target != packageName) {
             folding = true
+            floatPkg = np
             lastOutLaunch = SystemClock.elapsedRealtime()
             MixService.inst?.goHome(); ev("Folded Maps, then opening an app")
-            main.postDelayed({ folding = false; try { super@MainActivity.startActivity(i, options) } catch (e: Exception) { } }, 700)
+            main.postDelayed({
+                folding = false
+                try { super@MainActivity.startActivity(i, options) } catch (e: Exception) { }
+                // If Maps is still showing after that, fold it the slower way (find its minimize button).
+                main.postDelayed({ if (floatingNavPkg().isNotEmpty()) { ev("Maps still showing, folding it again"); tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }, 2200)
+            }, 700)
             return
         }
         super.startActivity(i, options)
@@ -461,13 +470,26 @@ class MainActivity : Activity() {
         val pk = tuckedPkg; val r = floatRect
         val justLaunched = SystemClock.elapsedRealtime() - lastOutLaunch < 5000
         ev("hub back in view" + (if (pk.isNotEmpty()) (if (justLaunched) ", skipped Maps (app just opened)" else ", bringing Maps back") else ""))
-        if (pk.isNotEmpty() && r != null && !justLaunched) {
-            tuckedPkg = ""
-            main.postDelayed({ try {
-                val i = packageManager.getLaunchIntentForPackage(pk)
-                if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(adjusted(r)); startActivity(i, o.toBundle()) }
-            } catch (e: Exception) { } }, 500)
+        if (pk.isNotEmpty() && r != null && !justLaunched && !sheetOpen) restoreMaps()
+    }
+
+    /** Puts the Maps window back on the map pane (the pane's current position, measured live). */
+    private fun restoreMaps() {
+        val pk = tuckedPkg; val r = paneRect ?: floatRect
+        if (pk.isEmpty() || r == null) return
+        tuckedPkg = ""
+        main.postDelayed({ try {
+            val i = packageManager.getLaunchIntentForPackage(pk)
+            if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(adjusted(r)); startActivity(i, o.toBundle()) }
+        } catch (e: Exception) { } }, 500)
+    }
+
+    /** The navigation app that is floating over the hub right now (the one the hub opened, or Maps/Waze opened by any other way). */
+    private fun floatingNavPkg(): String {
+        for (p in listOf(floatPkg, "com.google.android.apps.maps", "com.waze")) {
+            if (p.isNotEmpty() && (MixService.inst?.floatBounds(p)?.let { it.width() > 300 && it.height() > 150 } == true)) return p
         }
+        return ""
     }
     override fun onPause() { visible = false; stopViz(); stopLoc(); super.onPause() }
 
@@ -1122,7 +1144,7 @@ class MainActivity : Activity() {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             return try {
                 val o = android.app.ActivityOptions.makeBasic()
-                val want = android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }
+                val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }
                 o.setLaunchBounds(adjusted(want))
                 startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { Ops.launchApp(this@MainActivity, pkg) }
@@ -1146,12 +1168,43 @@ class MainActivity : Activity() {
         @JavascriptInterface fun getVersion(): String = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "?" } catch (e: Exception) { "?" }
         /** Starts turn-by-turn to a place in the navigation app, in the hub's map pane. */
         /** Spoken destination (address or place name): Maps/Waze find it themselves, which works far better for businesses than our own search. */
+        /** The page tells us where the map pane is (in pixels inside the page); we add where the page sits on the screen. */
+        @JavascriptInterface fun setPane(l: Int, t: Int, r: Int, b: Int) {
+            runOnUiThread {
+                try {
+                    val loc = IntArray(2); web.getLocationOnScreen(loc)
+                    val nr = android.graphics.Rect(l + loc[0], t + loc[1], r + loc[0], b + loc[1])
+                    paneRect = nr
+                    if (floatPkg.isNotEmpty()) {
+                        val fr = floatRect
+                        val moved = if (fr == null) 999 else Math.abs(fr.left - nr.left) + Math.abs(fr.top - nr.top) + Math.abs(fr.right - nr.right) + Math.abs(fr.bottom - nr.bottom)
+                        if (moved > 6) {
+                            if (fr == null || moved > 120) { calib = 0; adj.set(0, 0, 0, 0) }
+                            floatRect = nr; saveFloat()
+                        }
+                    }
+                } catch (e: Exception) { }
+            }
+        }
+
+        /** A hub screen (Settings, apps, themes, music picker) opened: fold the Maps window so it cannot cover it. */
+        @JavascriptInterface fun foldMaps() {
+            runOnUiThread {
+                sheetOpen = true
+                val np = floatingNavPkg()
+                if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np); ev("Folded Maps for a hub screen") }
+            }
+        }
+
+        /** The hub screen closed: put Maps back on the pane. */
+        @JavascriptInterface fun unfoldMaps() { runOnUiThread { sheetOpen = false; restoreMaps() } }
+
         @JavascriptInterface fun navigateQuery(pkg: String, query: String, l: Int, t: Int, r: Int, b: Int): Boolean {
             return try {
                 val q = Uri.encode(query)
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?q=$q&navigate=yes") else Uri.parse("google.navigation:q=$q&mode=d")
                 val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val o = android.app.ActivityOptions.makeBasic(); val want = android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
+                val o = android.app.ActivityOptions.makeBasic(); val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
                 startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { false }
         }
@@ -1160,7 +1213,7 @@ class MainActivity : Activity() {
             return try {
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?ll=$lat,$lon&navigate=yes") else Uri.parse("google.navigation:q=$lat,$lon&mode=d")
                 val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val o = android.app.ActivityOptions.makeBasic(); val want = android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
+                val o = android.app.ActivityOptions.makeBasic(); val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
                 startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { false }
         }
