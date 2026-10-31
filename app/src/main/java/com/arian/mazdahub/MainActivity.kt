@@ -767,13 +767,18 @@ class MainActivity : Activity() {
         js("window.hub&&hub.voiceErr&&hub.voiceErr(" + JSONObject.quote(code) + ")")
     }
 
+    /** The Google app provides the tablet's speech recognizer; report whether it is there and turned on. */
+    private fun googleSpeechState(): String = try {
+        if (packageManager.getApplicationInfo("com.google.android.googlequicksearchbox", 0).enabled) "on" else "DISABLED"
+    } catch (e: Exception) { "not installed" }
+
     private var voiceCands: List<android.content.ComponentName?> = emptyList()
     private var voiceIdx = -1
 
     /** Starts listening with the next speech service in the list; if one fails, the next is tried. */
     private fun startNextRecognizer(lastErr: String?) {
         voiceIdx++
-        if (voiceIdx >= voiceCands.size) { voiceErr(lastErr ?: "e5"); return }
+        if (voiceIdx >= voiceCands.size) { voiceErr(if (googleSpeechState() != "on") "nogoogle" else (lastErr ?: "e5")); return }
         val comp = voiceCands[voiceIdx]
         Ops.log(this, "Voice: trying " + (comp?.flattenToShortString() ?: "system default"))
         try { recognizer?.destroy() } catch (e: Exception) { }
@@ -790,7 +795,7 @@ class MainActivity : Activity() {
             override fun onEndOfSpeech() {}
             override fun onError(e: Int) {
                 if (recognizer !== r) return
-                if (e == 5) startNextRecognizer("e5") else voiceErr("e" + e)
+                if (e == 5 || e == 9) startNextRecognizer("e" + e) else voiceErr("e" + e)
             }
             override fun onResults(res: Bundle?) {
                 if (recognizer !== r) return
@@ -831,6 +836,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) { }
             cands.sortBy { if (it?.packageName?.contains("google") == true) 0 else 1 }
             cands.add(null)
+            Ops.log(this, "Voice: Google app is " + googleSpeechState())
             Ops.log(this, "Voice: speech services: " + cands.joinToString(", ") { it?.flattenToShortString() ?: "system default" })
             voiceCands = cands
             voiceIdx = -1
