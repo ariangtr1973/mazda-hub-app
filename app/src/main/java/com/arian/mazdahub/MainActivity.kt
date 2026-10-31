@@ -313,6 +313,8 @@ class MainActivity : Activity() {
     private var hubStarted = false
     private val lockHandler = Handler(Looper.getMainLooper())
     private var drift = 0
+    private var lastRelaunchAt = 0L
+    private val shieldViews = ArrayList<android.view.View>()
     @Volatile private var ringHue = 205
     private var ringView: android.view.View? = null
     @Volatile var calLog = ""
@@ -329,8 +331,51 @@ class MainActivity : Activity() {
         return android.graphics.drawable.LayerDrawable(arrayOf(outer, inner)).also { it.setLayerInset(1, (3 * dm).toInt(), (3 * dm).toInt(), (3 * dm).toInt(), (3 * dm).toInt()) }
     }
 
+    private fun removeShield() {
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            for (v in shieldViews) { try { wm.removeView(v) } catch (e: Exception) { } }
+        } catch (e: Exception) { }
+        shieldViews.clear()
+    }
+
+    private fun shieldParams(r: android.graphics.Rect): WindowManager.LayoutParams {
+        val lp = WindowManager.LayoutParams(r.width(), r.height(), WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            android.graphics.PixelFormat.TRANSLUCENT)
+        lp.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+        lp.x = r.left; lp.y = r.top
+        return lp
+    }
+
+    /** Invisible touch shield over the Maps window's edges and its top handle, so it cannot be dragged, resized or maximised by accident. */
+    private fun updateShield(win: android.graphics.Rect?) {
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            if (win == null || !hubStarted || !Settings.canDrawOverlays(this)) { removeShield(); return }
+            val d = resources.displayMetrics.density
+            val out = (8 * d).toInt(); val inn = (10 * d).toInt(); val top = (20 * d).toInt()
+            val rects = listOf(
+                android.graphics.Rect(win.left - out, win.top - out, win.right + out, win.top + top),
+                android.graphics.Rect(win.left - out, win.bottom - inn, win.right + out, win.bottom + out),
+                android.graphics.Rect(win.left - out, win.top + top, win.left + inn, win.bottom - inn),
+                android.graphics.Rect(win.right - inn, win.top + top, win.right + out, win.bottom - inn))
+            if (shieldViews.size != rects.size) {
+                removeShield()
+                for (r in rects) {
+                    val v = android.view.View(this)
+                    v.setOnTouchListener { _, _ -> true }
+                    wm.addView(v, shieldParams(r)); shieldViews.add(v)
+                }
+            } else {
+                for (n in rects.indices) wm.updateViewLayout(shieldViews[n], shieldParams(rects[n]))
+            }
+        } catch (e: Exception) { }
+    }
+
     /** A thin theme-coloured frame drawn over the Maps window's own white edge. Needs Display over other apps. */
     private fun updateRing(win: android.graphics.Rect?) {
+        updateShield(win)
         try {
             val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             if (win == null || !hubStarted || !Settings.canDrawOverlays(this)) { ringView?.let { wm.removeView(it) }; ringView = null; return }
@@ -357,16 +402,17 @@ class MainActivity : Activity() {
                 if (hubStarted && b != null && want != null) {
                     val ex = Math.abs(b.left - want.left) + Math.abs(b.top - want.top) + Math.abs(b.right - want.right) + Math.abs(b.bottom - want.bottom)
                     calLog = "want [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "] actual [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] adj [" + adj.left + "," + adj.top + "," + adj.right + "," + adj.bottom + "]"
-                    if (ex > 16) {
+                    if (ex > 10) {
                         if (++drift >= 2 && visible) {
                             drift = 0
                             if (calib < 3) { calib++; val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom; if (Math.abs(dl) < 60 && Math.abs(dt) < 60 && Math.abs(dr) < 60 && Math.abs(db) < 60) { adj.left += dl; adj.top += dt; adj.right += dr; adj.bottom += db } }
-                            relaunchFloat(pk, adjusted(want0!!))
+                            val nowMs = SystemClock.elapsedRealtime()
+                            if (nowMs - lastRelaunchAt > 2500) { lastRelaunchAt = nowMs; relaunchFloat(pk, adjusted(want0!!)) }
                         }
                     } else drift = 0
                 }
             } catch (e: Exception) { }
-            lockHandler.postDelayed(this, 900)
+            lockHandler.postDelayed(this, 600)
         }
     }
     private fun relaunchFloat(pk: String, r: android.graphics.Rect) {
