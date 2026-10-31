@@ -1085,6 +1085,17 @@ class MainActivity : Activity() {
         }
         @JavascriptInterface fun getVersion(): String = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "?" } catch (e: Exception) { "?" }
         /** Starts turn-by-turn to a place in the navigation app, in the hub's map pane. */
+        /** Spoken destination (address or place name): Maps/Waze find it themselves, which works far better for businesses than our own search. */
+        @JavascriptInterface fun navigateQuery(pkg: String, query: String, l: Int, t: Int, r: Int, b: Int): Boolean {
+            return try {
+                val q = Uri.encode(query)
+                val uri = if (pkg == "com.waze") Uri.parse("waze://?q=$q&navigate=yes") else Uri.parse("google.navigation:q=$q&mode=d")
+                val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val o = android.app.ActivityOptions.makeBasic(); val want = android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
+                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
+            } catch (e: Exception) { false }
+        }
+
         @JavascriptInterface fun navigateIn(pkg: String, lat: Double, lon: Double, name: String, l: Int, t: Int, r: Int, b: Int): Boolean {
             return try {
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?ll=$lat,$lon&navigate=yes") else Uri.parse("google.navigation:q=$lat,$lon&mode=d")

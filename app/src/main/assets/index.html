@@ -1859,8 +1859,7 @@
     const s = String(raw || '').toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!s) { voiceSay('I did not hear anything'); return; }
     let m;
-    if (/\b(go|take me|navigate|drive|directions?|head)\b.*\bhome\b/.test(s)) { voiceSay('Navigating home'); clickEl('g-home'); return; }
-    if (/\b(go|take me|navigate|drive|directions?|head)\b.*\bwork\b/.test(s)) { voiceSay('Navigating to work'); clickEl('g-work'); return; }
+    if ((m = s.match(/^(?:go|take me|navigate|drive|directions?|head)(?: me)?(?: to)?(?: my)? (home|work)$/))) { voiceSay(m[1] === 'home' ? 'Navigating home' : 'Navigating to work'); clickEl(m[1] === 'home' ? 'g-home' : 'g-work'); return; }
     if ((m = s.match(/^(?:navigate|take me|drive|directions?|go|head)(?: me)? to (.+)$/))) {
       if (window.hub.navVoice) { voiceSay('Looking for ' + m[1]); window.hub.navVoice(m[1]); } else voiceSay('Navigation is not ready');
       return;
@@ -2319,6 +2318,16 @@
 
     window.hub.navVoice = async q => {
       q = (q || '').trim(); if (!q) return;
+      // Default mode: hand the spoken address or place name straight to Maps, which finds businesses and addresses itself.
+      if (NATIVE && handoffOn()) {
+        let apps = []; try { apps = JSON.parse(H().getNavApps()); } catch (e) { }
+        const a = apps[0];
+        if (a) {
+          const r0 = $('swipe').getBoundingClientRect(), sx = window.devicePixelRatio || 1; let ok = false;
+          try { ok = H().navigateQuery(a.id, q, Math.round(r0.left * sx), Math.round(r0.top * sx), Math.round(r0.right * sx), Math.round(r0.bottom * sx)); } catch (e) { }
+          if (ok) { navPkg = a.id; closeSheet(); toast('Navigating to ' + q + ' in ' + a.name); try { H().speak('Navigating to ' + q); } catch (e) { } return; }
+        }
+      }
       const p = TM.pos(), b = 0.6;
       const u = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(q) +
         '&viewbox=' + [p[1] - b, p[0] + b, p[1] + b, p[0] - b].map(v => v.toFixed(4)).join(',') + '&countrycodes=us';
