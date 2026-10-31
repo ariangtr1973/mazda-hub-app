@@ -305,7 +305,7 @@ class MainActivity : Activity() {
     }
 
     private var visible = false
-    override fun onResume() { super.onResume(); visible = true; startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
+    override fun onResume() { super.onResume(); visible = true; Ops.fixStuckTimeout(this); startViz(); startLoc(); NowPlayingService.inst?.let { pushJs("hub.setNow(" + NowPlayingService.lastNow + ")") } }
     @Volatile var floatPkg = ""
     private var floatRect: android.graphics.Rect? = null
     private val adj = android.graphics.Rect(0, 0, 0, 0)

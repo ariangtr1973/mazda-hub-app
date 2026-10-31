@@ -78,6 +78,26 @@ object Ops {
         (c.getSystemService(Context.AUDIO_SERVICE) as AudioManager).isMusicActive
 
     // ---- screen timeout ----
+    /** Remember the screen timeout you normally use, so it can be put back when the car turns off. */
+    fun rememberTimeout(c: Context) {
+        try {
+            val cur = Settings.System.getInt(c.contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, 120000)
+            if (cur != 4 * 60 * 60 * 1000 && cur != 15000 && cur >= 30000) prefs(c).edit().putInt("orig_timeout", cur).apply()
+        } catch (e: Exception) { }
+    }
+
+    /** Put the screen timeout back to what you normally use (2 minutes if it was never recorded). */
+    fun restoreTimeout(c: Context) { setScreenTimeout(c, prefs(c).getInt("orig_timeout", 120000)) }
+
+    /** Older versions left the tablet stuck at a 15 second timeout after the car turned off; undo that. */
+    fun fixStuckTimeout(c: Context) {
+        try {
+            if (Settings.System.canWrite(c) && Settings.System.getInt(c.contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, 0) == 15000) {
+                restoreTimeout(c); log(c, "Screen timeout was stuck at 15 seconds; put back to normal")
+            }
+        } catch (e: Exception) { }
+    }
+
     fun setScreenTimeout(c: Context, ms: Int) {
         try {
             if (Settings.System.canWrite(c)) {
@@ -218,6 +238,7 @@ object Ops {
     // ---- car Bluetooth events ----
     fun onCarConnected(c: Context) {
         log(c, "Waking screen, opening the hub" + (if (Settings.canDrawOverlays(c)) "" else " (Display over other apps is OFF: Android may block this)"))
+        rememberTimeout(c)
         setScreenTimeout(c, 4 * 60 * 60 * 1000)
         scheduleReset(c)
         wakeScreen(c)
@@ -232,6 +253,6 @@ object Ops {
         cancelReset(c)
         MainActivity.live?.autoStop()
         mediaKey(c, KeyEvent.KEYCODE_MEDIA_PAUSE)
-        setScreenTimeout(c, 15000)
+        restoreTimeout(c)
     }
 }
