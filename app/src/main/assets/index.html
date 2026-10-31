@@ -1847,6 +1847,14 @@
   // ---- Voice commands: tap the clock, then speak ----
   function voiceSay(t) { toast(t); if (NATIVE) { try { H().speak(t); } catch (e) { } } }
   function clickEl(id) { const e = $(id); if (e) e.click(); }
+  window.hub.voiceState = () => toast('Listening\u2026 speak now');
+  window.hub.voiceErr = c => {
+    const net = 'Voice needs internet. Check Wi-Fi or the hotspot.', mic = 'Microphone is off for Mazda Hub. Allow it, then tap the clock again.';
+    const M = { nospeech: 'This tablet has no speech service. Install or turn on the Google app.', permission: mic, cancelled: 'Voice was cancelled',
+      e1: net, e2: net, e3: 'Microphone problem. Is another app using it?', e4: 'Voice service error. Try again.', e5: '',
+      e6: 'I did not hear anything', e7: 'I did not catch that. Try again.', e8: 'Voice is busy. Try again.', e9: mic };
+    const m = (c in M) ? M[c] : ('Voice problem: ' + c); if (m) toast(m);
+  };
   window.hub.voiceCmd = raw => {
     const s = String(raw || '').toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!s) { voiceSay('I did not hear anything'); return; }

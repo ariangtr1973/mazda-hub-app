@@ -759,6 +759,57 @@ class MainActivity : Activity() {
     }
 
     private var pendingBackup: String? = null
+    private var recognizer: android.speech.SpeechRecognizer? = null
+
+    /** Tells the page exactly why voice did not work, and keeps a line in Settings > Advanced for troubleshooting. */
+    private fun voiceErr(code: String) {
+        Ops.log(this, "Voice: " + code)
+        js("window.hub&&hub.voiceErr&&hub.voiceErr(" + JSONObject.quote(code) + ")")
+    }
+
+    /** Listens inside the hub (no pop-up) when the tablet has a speech service and the hub may use the microphone. */
+    private fun startCommandListening() {
+        val haveService = android.speech.SpeechRecognizer.isRecognitionAvailable(this)
+        val legacy = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        val haveLegacy = legacy.resolveActivity(packageManager) != null
+        Ops.log(this, "Voice: tapped. speech service " + (if (haveService) "yes" else "no") + ", pop-up listener " + (if (haveLegacy) "yes" else "no") +
+            ", hub microphone " + (if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "NOT allowed"))
+        if (!haveService && !haveLegacy) { voiceErr("nospeech"); return }
+        if (haveService) {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
+                voiceErr("permission"); return
+            }
+            try { recognizer?.destroy() } catch (e: Exception) { }
+            val r = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
+            recognizer = r
+            r.setRecognitionListener(object : android.speech.RecognitionListener {
+                override fun onReadyForSpeech(p: Bundle?) { js("window.hub&&hub.voiceState&&hub.voiceState()") }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(v: Float) {}
+                override fun onBufferReceived(b: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onError(e: Int) { voiceErr("e" + e) }
+                override fun onResults(res: Bundle?) {
+                    val said = res?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                    Ops.log(this@MainActivity, "Voice heard: " + said)
+                    if (said.isEmpty()) voiceErr("e7") else js("window.hub&&hub.voiceCmd&&hub.voiceCmd(" + JSONObject.quote(said) + ")")
+                }
+                override fun onPartialResults(p: Bundle?) {}
+                override fun onEvent(t: Int, p: Bundle?) {}
+            })
+            val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                .putExtra(android.speech.RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+            r.startListening(i)
+            return
+        }
+        val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Say a command")
+        @Suppress("DEPRECATION") startActivityForResult(i, REQ_CMD)
+    }
 
     /** Everything the hub remembers (app settings plus the page's own saved settings) as one JSON text. */
     private fun buildBackup(local: String): String {
@@ -822,7 +873,9 @@ class MainActivity : Activity() {
         } else if (requestCode == REQ_CMD) {
             val t = if (resultCode == Activity.RESULT_OK)
                 data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: "" else ""
-            js("window.hub&&hub.voiceCmd&&hub.voiceCmd(" + JSONObject.quote(t) + ")")
+            Ops.log(this, "Voice pop-up result " + resultCode + ": " + t)
+            if (t.isEmpty()) voiceErr(if (resultCode == Activity.RESULT_OK) "e7" else "cancelled")
+            else js("window.hub&&hub.voiceCmd&&hub.voiceCmd(" + JSONObject.quote(t) + ")")
         } else if (requestCode == REQ_BACKUP) {
             val uri = data?.data
             val text = pendingBackup
@@ -868,6 +921,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        try { recognizer?.destroy() } catch (e: Exception) { }
         if (live === this) live = null
         clearNet()
         try { tts?.shutdown() } catch (e: Exception) { }
@@ -912,16 +966,8 @@ class MainActivity : Activity() {
 
         /** Voice commands ("next", "pause", "navigate home" ...): the page decides what to do with the words. */
         @JavascriptInterface fun listenCmd(): Boolean {
-            return try {
-                val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Say a command")
-                runOnUiThread {
-                    try { @Suppress("DEPRECATION") startActivityForResult(i, REQ_CMD) }
-                    catch (e: Exception) { js("window.hub&&hub.voiceCmd&&hub.voiceCmd('')") }
-                }
-                true
-            } catch (e: Exception) { false }
+            runOnUiThread { try { startCommandListening() } catch (e: Exception) { voiceErr("x:" + e.javaClass.simpleName) } }
+            return true
         }
 
         @JavascriptInterface fun backup(local: String) {
