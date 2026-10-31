@@ -450,6 +450,8 @@ class MainActivity : Activity() {
                 val state = if (!wifiOn) "Wi-Fi is OFF on the tablet" else if (c2 == null) "Wi-Fi on, no network yet" else "network found, no internet yet"
                 say(if (!wifiOn) "Turn Wi-Fi on. Waiting for the hotspot (" + s + " s)" else "Waiting for the hotspot (" + s + " s)")
                 if (s % 15L < 5L) Ops.log(this@MainActivity, "Still waiting at " + s + " s: " + state)
+                // Nudge Android to look for the hotspot again (it can sit on an old, failed scan for minutes).
+                if (wifiOn && s % 20L < 5L) { try { @Suppress("DEPRECATION") val ok = (applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager).startScan(); if (s % 40L < 5L) Ops.log(this@MainActivity, "Asked Wi-Fi to scan for the hotspot (" + (if (ok) "started" else "Android declined") + ")") } catch (e: Exception) { } }
                 main.postDelayed(this, 5000)
             }
         }
