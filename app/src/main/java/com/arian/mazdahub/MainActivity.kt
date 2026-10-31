@@ -397,7 +397,7 @@ class MainActivity : Activity() {
     private val lockTick = object : Runnable {
         override fun run() {
             try {
-                val pk = floatPkg; val want0 = floatRect; val want = if (want0 != null) target(want0) else null
+                val pk = floatPkg; val want0 = paneRect ?: floatRect; val want = if (want0 != null) target(want0) else null
                 val b0 = if (pk.isNotEmpty()) MixService.inst?.floatBounds(pk) else null
                 val b = if (b0 != null && want != null && b0.width() > want.width() * 0.6 && b0.height() > want.height() * 0.6) b0 else null
                 updateRing(b)
@@ -427,7 +427,7 @@ class MainActivity : Activity() {
     /** Leaving the hub: the floating Maps window steps back with it. */
     @Volatile var lastOutLaunch = 0L
     private fun ev(msg: String) { MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
-    override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); ev("hub left view" + (if (floatPkg.isNotEmpty()) ", tucking Maps" else "")); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
+    override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
     private fun loadFloat() { try {
         val p = Ops.prefs(this); val pk = p.getString("float_pkg", "") ?: ""; val q = (p.getString("float_rect", "") ?: "").split(",")
@@ -467,7 +467,7 @@ class MainActivity : Activity() {
         super.onStart()
         rebindListener()
         hubStarted = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 1500)
-        val pk = tuckedPkg; val r = floatRect
+        val pk = tuckedPkg; val r = paneRect ?: floatRect
         val justLaunched = SystemClock.elapsedRealtime() - lastOutLaunch < 5000
         ev("hub back in view" + (if (pk.isNotEmpty()) (if (justLaunched) ", skipped Maps (app just opened)" else ", bringing Maps back") else ""))
         if (pk.isNotEmpty() && r != null && !justLaunched && !sheetOpen) restoreMaps()
@@ -482,6 +482,15 @@ class MainActivity : Activity() {
             val i = packageManager.getLaunchIntentForPackage(pk)
             if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(adjusted(r)); startActivity(i, o.toBundle()) }
         } catch (e: Exception) { } }, 500)
+        // Make sure it really landed on the pane: check a few times and put it back if it is off
+        for (d in longArrayOf(2200, 3800, 5600, 8000)) main.postDelayed({ try {
+            if (!hubStarted || sheetOpen || tuckedPkg.isNotEmpty()) return@postDelayed
+            val want = paneRect ?: floatRect ?: return@postDelayed
+            val tg = target(want); val b = MixService.inst?.floatBounds(pk)
+            if (b == null || b.width() < 300 || Math.abs(b.left - tg.left) + Math.abs(b.top - tg.top) + Math.abs(b.right - tg.right) + Math.abs(b.bottom - tg.bottom) > 10) {
+                ev("Maps not on its pane, putting it back"); lastRelaunchAt = SystemClock.elapsedRealtime(); relaunchFloat(pk, adjusted(want))
+            }
+        } catch (e: Exception) { } }, d)
     }
 
     /** The navigation app that is floating over the hub right now (the one the hub opened, or Maps/Waze opened by any other way). */
