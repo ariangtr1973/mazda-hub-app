@@ -55,6 +55,7 @@ class MainActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        loadFloat()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val loader = WebViewAssetLoader.Builder()
@@ -379,6 +380,27 @@ class MainActivity : Activity() {
     @Volatile var lastOutLaunch = 0L
     private fun ev(msg: String) { MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
     override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); ev("hub left view" + (if (floatPkg.isNotEmpty()) ", tucking Maps" else "")); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
+    private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
+    private fun loadFloat() { try {
+        val p = Ops.prefs(this); val pk = p.getString("float_pkg", "") ?: ""; val q = (p.getString("float_rect", "") ?: "").split(",")
+        if (pk.isNotEmpty() && q.size == 4) { floatPkg = pk; floatRect = android.graphics.Rect(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) }
+    } catch (e: Exception) { } }
+
+    private var folding = false
+    /** Any app the hub opens: first fold the Maps pop-up (what Home does) so it cannot sit on top of that app. */
+    override fun startActivity(intent: Intent?, options: Bundle?) {
+        val i = intent
+        val target = i?.component?.packageName ?: i?.`package`
+        if (i != null && !folding && floatPkg.isNotEmpty() && target != floatPkg && target != packageName && mapsOnTop()) {
+            folding = true
+            lastOutLaunch = SystemClock.elapsedRealtime()
+            MixService.inst?.goHome(); ev("Folded Maps, then opening an app")
+            main.postDelayed({ folding = false; try { super@MainActivity.startActivity(i, options) } catch (e: Exception) { } }, 700)
+            return
+        }
+        super.startActivity(i, options)
+    }
+
     private fun mapsOnTop(): Boolean = try { floatPkg.isNotEmpty() && (MixService.inst?.floatBounds(floatPkg)?.let { it.width() > 300 && it.height() > 150 } == true) } catch (e: Exception) { false }
 
     /** After an update Android sometimes leaves the now-playing listener unbound; ask it to reconnect. */
@@ -838,13 +860,7 @@ class MainActivity : Activity() {
 
         @JavascriptInterface fun getApps(all: Boolean): String = try { Ops.musicApps(this@MainActivity, all).toString() } catch (e: Exception) { "[]" }
 
-        @JavascriptInterface fun launchApp(pkg: String): Boolean {
-            lastOutLaunch = SystemClock.elapsedRealtime()
-            if (!mapsOnTop()) return Ops.launchApp(this@MainActivity, pkg)
-            // Fold the Maps pop-up first (what pressing Home does), then open the app so Maps does not sit on top of it.
-            runOnUiThread { MixService.inst?.goHome(); ev("Folded Maps, then opening an app"); main.postDelayed({ Ops.launchApp(this@MainActivity, pkg) }, 700) }
-            return true
-        }
+        @JavascriptInterface fun launchApp(pkg: String): Boolean { lastOutLaunch = SystemClock.elapsedRealtime(); return Ops.launchApp(this@MainActivity, pkg) }
         /** Opens an app asking Android to size its window to this box (screen pixels). Honoured only when freeform windows are enabled. */
         @JavascriptInterface fun launchAppIn(pkg: String, l: Int, t: Int, r: Int, b: Int): Boolean {
             val i = packageManager.getLaunchIntentForPackage(pkg) ?: return false
@@ -853,7 +869,7 @@ class MainActivity : Activity() {
                 val o = android.app.ActivityOptions.makeBasic()
                 val want = android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }
                 o.setLaunchBounds(adjusted(want))
-                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; true
+                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { Ops.launchApp(this@MainActivity, pkg) }
         }
         @JavascriptInterface fun getAppInfo(json: String): String = try {
@@ -879,7 +895,7 @@ class MainActivity : Activity() {
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?ll=$lat,$lon&navigate=yes") else Uri.parse("google.navigation:q=$lat,$lon&mode=d")
                 val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 val o = android.app.ActivityOptions.makeBasic(); val want = android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
-                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; true
+                startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { false }
         }
         @JavascriptInterface fun setThemeHue(h: Int) { ringHue = h; }
