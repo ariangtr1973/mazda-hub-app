@@ -767,6 +767,47 @@ class MainActivity : Activity() {
         js("window.hub&&hub.voiceErr&&hub.voiceErr(" + JSONObject.quote(code) + ")")
     }
 
+    private var voiceCands: List<android.content.ComponentName?> = emptyList()
+    private var voiceIdx = -1
+
+    /** Starts listening with the next speech service in the list; if one fails, the next is tried. */
+    private fun startNextRecognizer(lastErr: String?) {
+        voiceIdx++
+        if (voiceIdx >= voiceCands.size) { voiceErr(lastErr ?: "e5"); return }
+        val comp = voiceCands[voiceIdx]
+        Ops.log(this, "Voice: trying " + (comp?.flattenToShortString() ?: "system default"))
+        try { recognizer?.destroy() } catch (e: Exception) { }
+        val r: android.speech.SpeechRecognizer
+        try {
+            r = if (comp != null) android.speech.SpeechRecognizer.createSpeechRecognizer(this, comp) else android.speech.SpeechRecognizer.createSpeechRecognizer(this)
+        } catch (e: Exception) { startNextRecognizer("x:" + e.javaClass.simpleName); return }
+        recognizer = r
+        r.setRecognitionListener(object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(p: Bundle?) { js("window.hub&&hub.voiceState&&hub.voiceState()") }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(v: Float) {}
+            override fun onBufferReceived(b: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onError(e: Int) {
+                if (recognizer !== r) return
+                if (e == 5) startNextRecognizer("e5") else voiceErr("e" + e)
+            }
+            override fun onResults(res: Bundle?) {
+                if (recognizer !== r) return
+                val said = res?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                Ops.log(this@MainActivity, "Voice heard: " + said)
+                if (said.isEmpty()) voiceErr("e7") else js("window.hub&&hub.voiceCmd&&hub.voiceCmd(" + JSONObject.quote(said) + ")")
+            }
+            override fun onPartialResults(p: Bundle?) {}
+            override fun onEvent(t: Int, p: Bundle?) {}
+        })
+        val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            .putExtra(android.speech.RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+        try { r.startListening(i) } catch (e: Exception) { Ops.log(this, "Voice: " + e.javaClass.simpleName + " from " + (comp?.packageName ?: "default")); startNextRecognizer("x:" + e.javaClass.simpleName) }
+    }
+
     /** Listens inside the hub (no pop-up) when the tablet has a speech service and the hub may use the microphone. */
     private fun startCommandListening() {
         val haveService = android.speech.SpeechRecognizer.isRecognitionAvailable(this)
@@ -780,29 +821,20 @@ class MainActivity : Activity() {
                 requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
                 voiceErr("permission"); return
             }
-            try { recognizer?.destroy() } catch (e: Exception) { }
-            val r = android.speech.SpeechRecognizer.createSpeechRecognizer(this)
-            recognizer = r
-            r.setRecognitionListener(object : android.speech.RecognitionListener {
-                override fun onReadyForSpeech(p: Bundle?) { js("window.hub&&hub.voiceState&&hub.voiceState()") }
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(v: Float) {}
-                override fun onBufferReceived(b: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onError(e: Int) { voiceErr("e" + e) }
-                override fun onResults(res: Bundle?) {
-                    val said = res?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
-                    Ops.log(this@MainActivity, "Voice heard: " + said)
-                    if (said.isEmpty()) voiceErr("e7") else js("window.hub&&hub.voiceCmd&&hub.voiceCmd(" + JSONObject.quote(said) + ")")
+            // Try every speech service on the tablet (Google first, the system default last): some tablets refuse the default one.
+            val cands = ArrayList<android.content.ComponentName?>()
+            try {
+                for (ri in packageManager.queryIntentServices(Intent(android.speech.RecognitionService.SERVICE_INTERFACE), 0)) {
+                    val si = ri.serviceInfo ?: continue
+                    cands.add(android.content.ComponentName(si.packageName, si.name))
                 }
-                override fun onPartialResults(p: Bundle?) {}
-                override fun onEvent(t: Int, p: Bundle?) {}
-            })
-            val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                .putExtra(android.speech.RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
-            r.startListening(i)
+            } catch (e: Exception) { }
+            cands.sortBy { if (it?.packageName?.contains("google") == true) 0 else 1 }
+            cands.add(null)
+            Ops.log(this, "Voice: speech services: " + cands.joinToString(", ") { it?.flattenToShortString() ?: "system default" })
+            voiceCands = cands
+            voiceIdx = -1
+            startNextRecognizer(null)
             return
         }
         val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
