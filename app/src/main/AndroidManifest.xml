@@ -66,6 +66,8 @@
             </intent-filter>
         </service>
 
+        <receiver android:name=".ResetReceiver" android:exported="false" />
+
         <receiver android:name=".CarReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />

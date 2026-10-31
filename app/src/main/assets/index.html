@@ -643,6 +643,30 @@
   .wxc-s { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 0.82rem; color: var(--ink-soft); white-space: nowrap; font-weight: 500; }
   .time-big { font-size: clamp(2.8rem, 5.4cqw, 4.4rem) !important; }
   .time-wrap { flex: 1 1 0; }
+  /* ===== v0.50 readability + bigger tap areas (no layout, color or position changes) ===== */
+  /* small captions a little larger and bolder; tracking reduced so widths stay about the same */
+  .media .controls .cbtn .cap, .media .controls .cbtn.big .cap { font-size: 0.78rem !important; font-weight: 700 !important; letter-spacing: 0.08em !important; }
+  .media .controls .mix span { font-size: 0.7rem !important; font-weight: 700 !important; letter-spacing: 0.03em !important; white-space: nowrap !important; }
+  .np-src, button.np-src { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.1em; }
+  .times { font-weight: 500; color: var(--ink-soft); }
+  a.openapp { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em; color: var(--ink); }
+  .favhead span { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.15em; color: var(--ink-soft); }
+  .chip { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em; color: var(--ink); }
+  .stat span, .sample, .tabs .hint { font-size: 0.8rem; font-weight: 500; color: var(--ink-soft); letter-spacing: 0.14em; }
+  .kc small { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.14em; color: var(--ink-soft); }
+  .np-artist, .time-date, .turn-road, .wx-cond, .tab, .label, .sheet-sub { font-weight: 400; }
+  :root { --ink-soft: rgba(240, 246, 252, 0.92); --ink-dim: rgba(214, 226, 240, 0.76); }
+  /* invisible tap-area growth: same look, same position, target at least ~64px */
+  .tab, .chip, .sb, a.openapp, button.np-src, .volrow .kc, .sheet-close { position: relative; }
+  .tab::after, .chip::after, .sb::after, a.openapp::after, button.np-src::after, .sheet-close::after, .volrow .kc::after {
+    content: ""; position: absolute; left: -4px; right: -4px; top: -10px; bottom: -10px; }
+  .sb.net::after, .sb.ags::after { left: -10px; right: -10px; top: -12px; bottom: -12px; }
+  .volrow .kc::after { top: -2px; bottom: -2px; left: -2px; right: -2px; }
+  .sheet-close::after { left: -2px; right: -2px; top: -2px; bottom: -2px; }
+  /* night dimming: a black veil over everything except the toast; nothing moves or recolors */
+  #nightdim { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 9000; transition: opacity 1.5s ease; }
+  #nightdim.on { opacity: 0.42; }
+  .toast { z-index: 9500; }
 </style>
 
 <div class="bg" aria-hidden="true">
@@ -927,6 +951,9 @@
           <button class="srow" id="p-delay"><span>Wait before play</span><span class="st ok" id="s-delay"></span></button>
           <button class="srow" id="p-awake"><span>Keep screen on</span><span class="st" id="s-awake"></span></button>
           <details class="diag"><summary>Advanced</summary>
+            <button class="srow" id="p-night"><span>Night dimming (Auto = after dark)</span><span class="st" id="s-night"></span></button>
+            <button class="srow" id="p-backup"><span>Back up settings to a file (choose Google Drive)</span><span class="st">Save</span></button>
+            <button class="srow" id="p-restore"><span>Restore settings from a backup file</span><span class="st">Open</span></button>
             <button class="srow" id="p-navmode"><span>Where to? starts navigation in</span><span class="st" id="s-navmode"></span></button>
             <button class="srow" id="p-bars"><span>Full screen (hide Android Back / Home buttons)</span><span class="st" id="s-bars"></span></button>
             <button class="srow" id="p-clean"><span>Clean up memory and cache now</span><span class="st" id="s-clean">Run</span></button>
@@ -945,6 +972,7 @@
   <linearGradient id="gCloud" gradientUnits="userSpaceOnUse" x1="0" y1="14" x2="0" y2="52"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#aebdd3"/></linearGradient>
   <linearGradient id="gCloudD" gradientUnits="userSpaceOnUse" x1="0" y1="14" x2="0" y2="52"><stop offset="0" stop-color="#9aa8bd"/><stop offset="1" stop-color="#4d5a70"/></linearGradient>
 </defs></svg>
+<div id="nightdim" aria-hidden="true"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="nav.js"></script>
@@ -1569,7 +1597,7 @@
   $('open-app').addEventListener('click', e => { if (NATIVE && sourceId !== 'local') { e.preventDefault(); try { window.HubNative.launchApp(sourceId); } catch (x) {} } });
   function renderSource() {
     const cur = srcById(sourceId);
-    $('np-src-name').textContent = 'Now playing \u00b7 ' + cur.name;
+    $('np-src-name').textContent = window.__autoMsg || ('Now playing \u00b7 ' + cur.name);
     const oa = $('open-app');
     if (NATIVE) { oa.hidden = true; }
     else if (cur.link) { oa.href = cur.link; oa.hidden = false; } else { oa.hidden = true; }
@@ -1743,6 +1771,7 @@
     $('s-delay').textContent = c.delay + ' s';
     { const on = $('awake-btn').getAttribute('aria-pressed') === 'true'; $('s-awake').textContent = on ? 'On' : 'Off'; $('s-awake').className = 'st ' + (on ? 'ok' : ''); }
     $('s-lite').textContent = isLite() ? 'On' : 'Off'; $('s-lite').className = 'st ' + (isLite() ? 'ok' : '');
+    $('s-night').textContent = { auto: 'Auto', on: 'On', off: 'Off' }[nightMode()];
     const box = $('car-list'); box.innerHTML = '';
     let devs = []; try { devs = JSON.parse(H().getBtDevices()); } catch (e) {}
     if (!devs.length) { const d = document.createElement('div'); d.className = 'autoline'; d.textContent = c.btPerm ? 'No paired Bluetooth devices. Pair the car in Android settings first.' : 'Allow Bluetooth access to see paired devices.'; box.append(d); }
@@ -1775,7 +1804,97 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('setup').classList.contains('open')) renderSetup(); });
   window.addEventListener('focus', () => { if ($('setup').classList.contains('open')) renderSetup(); });
   // Called by the app
-  window.hub.autoStatus = msg => { $('autoline').textContent = msg; toast(msg); };
+  window.hub.autoStatus = msg => {
+    $('autoline').textContent = msg; toast(msg);
+    window.__autoMsg = String(msg).replace(/^Car connected\.\s*/, '');
+    clearTimeout(window.__autoMsgT);
+    window.__autoMsgT = setTimeout(() => { window.__autoMsg = ''; renderSource(); }, /^(Playing|Car disconnected)/.test(msg) ? 5000 : 240000);
+    renderSource();
+  };
+
+  // ---- Night dimming: Auto (after dark), On, or Off ----
+  function nightMode() { try { return localStorage.getItem('hub-night') || 'auto'; } catch (e) { return 'auto'; } }
+  window.hubApplyNight = () => {
+    const m = nightMode(), h = new Date().getHours();
+    const dark = (typeof window.hubNight === 'boolean') ? window.hubNight : (h >= 19 || h < 6);
+    const on = m === 'on' || (m === 'auto' && dark);
+    $('nightdim').classList.toggle('on', on);
+    return on;
+  };
+  setInterval(() => window.hubApplyNight(), 60000); window.hubApplyNight();
+  $('p-night').addEventListener('click', () => {
+    const next = { auto: 'on', on: 'off', off: 'auto' }[nightMode()];
+    try { localStorage.setItem('hub-night', next); } catch (e) { }
+    window.hubApplyNight(); renderSetup();
+  });
+
+  // ---- Backup and restore of settings (file picker lets you choose the Google Drive folder) ----
+  $('p-backup').addEventListener('click', () => {
+    if (!NATIVE) { toast('Backup works in the Mazda Hub app'); return; }
+    const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } } catch (e) { }
+    try { H().backup(JSON.stringify(o)); } catch (e) { toast('Backup is not available'); }
+  });
+  $('p-restore').addEventListener('click', () => {
+    if (!NATIVE) { toast('Restore works in the Mazda Hub app'); return; }
+    try { H().restore(); } catch (e) { toast('Restore is not available'); }
+  });
+  window.hub.restoreLocal = o => {
+    try { Object.keys(o || {}).forEach(k => localStorage.setItem(k, o[k])); } catch (e) { }
+    toast('Settings restored. Reloading…'); setTimeout(() => location.reload(), 1500);
+  };
+  window.hub.backupDone = msg => toast(msg);
+
+  // ---- Voice commands: tap the clock, then speak ----
+  function voiceSay(t) { toast(t); if (NATIVE) { try { H().speak(t); } catch (e) { } } }
+  function clickEl(id) { const e = $(id); if (e) e.click(); }
+  window.hub.voiceCmd = raw => {
+    const s = String(raw || '').toLowerCase().replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!s) { voiceSay('I did not hear anything'); return; }
+    let m;
+    if (/\b(go|take me|navigate|drive|directions?|head)\b.*\bhome\b/.test(s)) { voiceSay('Navigating home'); clickEl('g-home'); return; }
+    if (/\b(go|take me|navigate|drive|directions?|head)\b.*\bwork\b/.test(s)) { voiceSay('Navigating to work'); clickEl('g-work'); return; }
+    if ((m = s.match(/^(?:navigate|take me|drive|directions?|go|head)(?: me)? to (.+)$/))) {
+      if (window.hub.navVoice) { voiceSay('Looking for ' + m[1]); window.hub.navVoice(m[1]); } else voiceSay('Navigation is not ready');
+      return;
+    }
+    if (/\b(end|stop|cancel)\b.*\b(navigation|directions|route|trip)\b/.test(s)) { voiceSay('Navigation ended'); clickEl('gb-end'); return; }
+    if ((m = s.match(/\b(mute|unmute)\b.*\b(directions|navigation|guidance)\b/))) {
+      const isMuted = $('gb-mute').textContent === 'Unmute';
+      if ((m[1] === 'mute') !== isMuted) clickEl('gb-mute'); return;
+    }
+    if ((m = s.match(/\bvolume (?:to |at )?(\d{1,3})\b/))) { try { H().setVolume(Math.min(100, +m[1])); } catch (e) { } voiceSay('Volume ' + Math.min(100, +m[1])); return; }
+    if (/\b(volume up|louder|turn it up|turn up)\b/.test(s)) { clickEl('v-up'); clickEl('v-up'); return; }
+    if (/\b(volume down|quieter|softer|turn it down|turn down)\b/.test(s)) { clickEl('v-down'); clickEl('v-down'); return; }
+    if ((m = s.match(/^(mute|unmute)\b/))) { try { if ((m[1] === 'mute') !== H().isMuted()) H().toggleMute(); } catch (e) { } return; }
+    if (/\b(start|play)\b.*\bmix\b|^mix\b/.test(s)) { voiceSay('Starting a mix'); clickEl('btn-mix'); return; }
+    if (/\b(dislike|thumbs down|thumb down)\b/.test(s)) { voiceSay('Disliked'); clickEl('btn-dislike'); return; }
+    if (/\b(like|thumbs up|thumb up|love this)\b/.test(s)) { voiceSay('Liked'); clickEl('btn-like'); return; }
+    if (/\b(next|skip)\b/.test(s)) { voiceSay('Next'); clickEl('btn-next'); return; }
+    if (/\b(previous|go back|last song|back)\b/.test(s)) { voiceSay('Previous'); clickEl('btn-prev'); return; }
+    if (/^(pause|stop|quiet|silence)\b/.test(s)) { try { H().mediaKey('pause'); } catch (e) { } voiceSay('Paused'); return; }
+    if (/^(play|resume|continue|unpause)\b/.test(s)) { try { H().mediaKey('play'); } catch (e) { } voiceSay('Playing'); return; }
+    if (/what('s| is)? (this|playing)|what song/.test(s)) { voiceSay(($('np-title').textContent || '') + (($('np-artist').textContent) ? ' by ' + $('np-artist').textContent : '')); return; }
+    if ((m = s.match(/\bnight (?:mode |dimming )?(on|off|auto)\b/)) || (m = s.match(/\bdim(?:ming)? (?:the )?(?:screen )?(on|off|auto)\b/))) {
+      try { localStorage.setItem('hub-night', m[1]); } catch (e) { } window.hubApplyNight(); renderSetup(); voiceSay('Night dimming ' + m[1]); return;
+    }
+    if ((m = s.match(/^(?:open|launch|start) (.+)$/)) && NATIVE) {
+      let list = []; try { list = JSON.parse(H().getApps(true)); } catch (e) { }
+      const q = m[1].replace(/^the /, '');
+      const hit = list.find(a => a.name.toLowerCase() === q) || list.find(a => a.name.toLowerCase().includes(q) || q.includes(a.name.toLowerCase()));
+      if (hit) { voiceSay('Opening ' + hit.name); try { H().launchApp(hit.id); } catch (e) { } } else voiceSay('I could not find ' + q);
+      return;
+    }
+    voiceSay('Sorry, I did not understand ' + raw);
+  };
+  (function () {
+    const tw = document.querySelector('.time-wrap'); if (!tw) return;
+    tw.style.cursor = 'pointer';
+    tw.addEventListener('click', () => {
+      if (!NATIVE) { toast('Voice commands work in the Mazda Hub app'); return; }
+      toast('Listening…'); let ok = false; try { ok = H().listenCmd(); } catch (e) { }
+      if (!ok) toast('Voice is not available on this tablet');
+    });
+  })();
   window.hub.setAwake = on => { wantAwake = !!on; lockScreen(); };
   if (NATIVE) {
     try { micOk = !!JSON.parse(H().getSetup()).mic; } catch (e) {}
@@ -1990,6 +2109,7 @@
       const r = await fetch(u, { cache: 'no-store' });
       if (!r.ok) return;
       const j = await r.json(), c = j.current, night = c.is_day === 0, kind = wxKind(c.weather_code);
+      window.hubNight = night; try { window.hubApplyNight(); } catch (e) { }
       $('wx-ic').innerHTML = wxIcon(kind, night);
       const pane = $('wx-pane'); pane.className = 'pane wx-pane k-' + kind + (night ? ' night' : '');
       $('wx-temp').textContent = Math.round(c.temperature_2m) + '°';
@@ -2189,6 +2309,15 @@
     function openSheet() { assign = null; sheet.hidden = false; inp.value = ''; msg.textContent = ''; showSaved(); lockInput(); if (!inp.disabled && !NATIVE) inp.focus(); }
     function closeSheet() { sheet.hidden = true; assign = null; try { inp.blur(); } catch (e) { } }
 
+    window.hub.navVoice = async q => {
+      q = (q || '').trim(); if (!q) return;
+      const p = TM.pos(), b = 0.6;
+      const u = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(q) +
+        '&viewbox=' + [p[1] - b, p[0] + b, p[1] + b, p[0] - b].map(v => v.toFixed(4)).join(',') + '&countrycodes=us';
+      const r = await get(u); let arr = []; try { arr = JSON.parse(r.body); } catch (e) { }
+      if (r.st !== 200 || !arr.length) { toast('Could not find ' + q); try { H().speak('I could not find ' + q); } catch (e) { } return; }
+      const x = arr[0], n = nameOf(x); pick({ name: n.name, sub: n.sub, lat: +x.lat, lon: +x.lon });
+    };
     $('g-where').addEventListener('click', openSheet);
     $('sh-x').addEventListener('click', closeSheet);
     $('sh-go').addEventListener('click', () => search(inp.value));

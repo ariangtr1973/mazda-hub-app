@@ -11,8 +11,8 @@ android {
         applicationId 'com.arian.mazdahub'
         minSdk 26
         targetSdk 34
-        versionCode 49
-        versionName '0.49'
+        versionCode 50
+        versionName '0.50'
     }
 
     // A fixed key so a newer build installs over the older one without uninstalling first.
@@ -30,7 +30,10 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
+            // Signed with the same fixed key as the debug build, so it installs over your current app and keeps your settings.
             minifyEnabled false
+            shrinkResources false
+            debuggable false
             signingConfig signingConfigs.debug
         }
     }

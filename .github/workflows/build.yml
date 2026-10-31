@@ -29,7 +29,7 @@ jobs:
       - name: Build
         run: |
           set +e
-          gradle assembleDebug --no-daemon --stacktrace > build.log 2>&1
+          gradle assembleDebug assembleRelease --no-daemon --stacktrace > build.log 2>&1
           rc=$?
           grep -E "^e: |error:|What went wrong" -A2 build.log | head -20 | while IFS= read -r l; do echo "::error::$l"; done
           exit $rc
@@ -38,12 +38,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mazda-hub-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
 
       - name: Publish a download link
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Latest Mazda Hub build
-          body: Download app-debug.apk below and open it on the tablet to install.
-          files: app/build/outputs/apk/debug/app-debug.apk
+          body: Download app-release.apk (recommended) or app-debug.apk below and open it on the tablet to install. Both install over the current app and keep your settings.
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/debug/app-debug.apk

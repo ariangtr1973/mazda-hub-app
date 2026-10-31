@@ -1,5 +1,7 @@
 package com.arian.mazdahub
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -201,10 +203,23 @@ object Ops {
         return null
     }
 
+    // ---- safety net: if the car-disconnect message is ever missed, the long screen timeout is undone after 5 hours ----
+    private fun resetIntent(c: Context): PendingIntent =
+        PendingIntent.getBroadcast(c, 77, Intent(c, ResetReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+    fun scheduleReset(c: Context) {
+        try { (c.getSystemService(Context.ALARM_SERVICE) as AlarmManager).set(AlarmManager.RTC, System.currentTimeMillis() + 5L * 3600 * 1000, resetIntent(c)) } catch (e: Exception) { }
+    }
+
+    fun cancelReset(c: Context) {
+        try { (c.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(resetIntent(c)) } catch (e: Exception) { }
+    }
+
     // ---- car Bluetooth events ----
     fun onCarConnected(c: Context) {
         log(c, "Waking screen, opening the hub" + (if (Settings.canDrawOverlays(c)) "" else " (Display over other apps is OFF: Android may block this)"))
         setScreenTimeout(c, 4 * 60 * 60 * 1000)
+        scheduleReset(c)
         wakeScreen(c)
         val i = Intent(c, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -214,6 +229,7 @@ object Ops {
 
     fun onCarDisconnected(c: Context) {
         log(c, "Pausing music, screen will sleep")
+        cancelReset(c)
         MainActivity.live?.autoStop()
         mediaKey(c, KeyEvent.KEYCODE_MEDIA_PAUSE)
         setScreenTimeout(c, 15000)

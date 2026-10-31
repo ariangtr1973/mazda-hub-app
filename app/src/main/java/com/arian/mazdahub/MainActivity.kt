@@ -758,12 +758,95 @@ class MainActivity : Activity() {
         } catch (e: Exception) { }
     }
 
+    private var pendingBackup: String? = null
+
+    /** Everything the hub remembers (app settings plus the page's own saved settings) as one JSON text. */
+    private fun buildBackup(local: String): String {
+        val root = JSONObject()
+        root.put("app", "mazda-hub")
+        root.put("version", try { packageManager.getPackageInfo(packageName, 0).versionName ?: "?" } catch (e: Exception) { "?" })
+        val prefs = JSONObject()
+        for ((key, v) in Ops.prefs(this).all) {
+            if (key == "autolog") continue
+            val o = JSONObject()
+            var ok = true
+            when (v) {
+                is Boolean -> { o.put("t", "b"); o.put("v", v) }
+                is Int -> { o.put("t", "i"); o.put("v", v) }
+                is Long -> { o.put("t", "l"); o.put("v", v) }
+                is Float -> { o.put("t", "f"); o.put("v", v.toDouble()) }
+                is String -> { o.put("t", "s"); o.put("v", v) }
+                else -> ok = false
+            }
+            if (ok) prefs.put(key, o)
+        }
+        root.put("prefs", prefs)
+        root.put("local", try { JSONObject(local) } catch (e: Exception) { JSONObject() })
+        return root.toString(2)
+    }
+
+    private fun applyBackup(text: String): String {
+        val root = JSONObject(text)
+        if (root.optString("app") != "mazda-hub") return "That file is not a Mazda Hub backup"
+        val ed = Ops.prefs(this).edit()
+        var n = 0
+        val pr = root.optJSONObject("prefs")
+        if (pr != null) {
+            val keys = pr.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val o = pr.getJSONObject(key)
+                when (o.optString("t")) {
+                    "b" -> ed.putBoolean(key, o.getBoolean("v"))
+                    "i" -> ed.putInt(key, o.getInt("v"))
+                    "l" -> ed.putLong(key, o.getLong("v"))
+                    "f" -> ed.putFloat(key, o.getDouble("v").toFloat())
+                    "s" -> ed.putString(key, o.getString("v"))
+                    else -> n--
+                }
+                n++
+            }
+        }
+        ed.apply()
+        val loc = root.optJSONObject("local")
+        js("window.hub&&hub.restoreLocal&&hub.restoreLocal(" + (loc?.toString() ?: "{}") + ")")
+        return "Restored " + n + " settings"
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQ_VOICE) {
             val t = if (resultCode == Activity.RESULT_OK)
                 data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: "" else ""
             js("window.hub&&hub.voiceResult&&hub.voiceResult(" + JSONObject.quote(t) + ")")
+        } else if (requestCode == REQ_CMD) {
+            val t = if (resultCode == Activity.RESULT_OK)
+                data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: "" else ""
+            js("window.hub&&hub.voiceCmd&&hub.voiceCmd(" + JSONObject.quote(t) + ")")
+        } else if (requestCode == REQ_BACKUP) {
+            val uri = data?.data
+            val text = pendingBackup
+            pendingBackup = null
+            if (resultCode == Activity.RESULT_OK && uri != null && text != null) {
+                Thread {
+                    val msg = try {
+                        contentResolver.openOutputStream(uri, "wt")?.use { it.write(buildBackup(text).toByteArray(Charsets.UTF_8)) }
+                        "Settings saved. Keep this file somewhere safe."
+                    } catch (e: Exception) { "Backup failed: " + e.javaClass.simpleName }
+                    js("window.hub&&hub.backupDone&&hub.backupDone(" + JSONObject.quote(msg) + ")")
+                }.start()
+            }
+        } else if (requestCode == REQ_RESTORE) {
+            val uri = data?.data
+            if (resultCode == Activity.RESULT_OK && uri != null) {
+                Thread {
+                    val msg = try {
+                        val txt = contentResolver.openInputStream(uri)?.use { String(it.readBytes(), Charsets.UTF_8) } ?: ""
+                        applyBackup(txt)
+                    } catch (e: Exception) { "Restore failed: " + e.javaClass.simpleName }
+                    js("window.hub&&hub.backupDone&&hub.backupDone(" + JSONObject.quote(msg) + ")")
+                }.start()
+            }
         } else if (requestCode == REQ_FILE) {
             fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
             fileCallback = null
@@ -826,6 +909,40 @@ class MainActivity : Activity() {
         } catch (e: Exception) { false }
 
         @JavascriptInterface fun isMuted(): Boolean = try { audio().isStreamMute(android.media.AudioManager.STREAM_MUSIC) } catch (e: Exception) { false }
+
+        /** Voice commands ("next", "pause", "navigate home" ...): the page decides what to do with the words. */
+        @JavascriptInterface fun listenCmd(): Boolean {
+            return try {
+                val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Say a command")
+                runOnUiThread {
+                    try { @Suppress("DEPRECATION") startActivityForResult(i, REQ_CMD) }
+                    catch (e: Exception) { js("window.hub&&hub.voiceCmd&&hub.voiceCmd('')") }
+                }
+                true
+            } catch (e: Exception) { false }
+        }
+
+        @JavascriptInterface fun backup(local: String) {
+            pendingBackup = local
+            runOnUiThread {
+                try {
+                    val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType("application/json").putExtra(Intent.EXTRA_TITLE, "mazda-hub-settings.json")
+                    @Suppress("DEPRECATION") startActivityForResult(i, REQ_BACKUP)
+                } catch (e: Exception) { js("window.hub&&hub.backupDone&&hub.backupDone('Backup is not available on this tablet')") }
+            }
+        }
+
+        @JavascriptInterface fun restore() {
+            runOnUiThread {
+                try {
+                    val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                    @Suppress("DEPRECATION") startActivityForResult(i, REQ_RESTORE)
+                } catch (e: Exception) { js("window.hub&&hub.backupDone&&hub.backupDone('Restore is not available on this tablet')") }
+            }
+        }
 
         @JavascriptInterface fun listen(): Boolean {
             return try {
@@ -1078,6 +1195,9 @@ class MainActivity : Activity() {
         private const val REQ_MIC = 1003
         private const val REQ_LOC = 1004
         private const val REQ_VOICE = 1005
+        private const val REQ_CMD = 1006
+        private const val REQ_BACKUP = 1007
+        private const val REQ_RESTORE = 1008
         @Volatile var live: MainActivity? = null
     }
 }
