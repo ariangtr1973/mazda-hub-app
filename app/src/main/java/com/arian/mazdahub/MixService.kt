@@ -90,6 +90,9 @@ class MixService : AccessibilityService() {
         }
     }
 
+    /** Same as pressing the Home button: Samsung folds floating pop-up windows into their bubbles. */
+    fun goHome() { performGlobalAction(GLOBAL_ACTION_HOME) }
+
     /** Last resort, same as doing it by hand: open Recents, swipe the Maps card away, go back to the app you were in. */
     private fun closeViaRecents(pkg: String) {
         performGlobalAction(GLOBAL_ACTION_RECENTS)

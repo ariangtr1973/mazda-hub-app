@@ -379,6 +379,8 @@ class MainActivity : Activity() {
     @Volatile var lastOutLaunch = 0L
     private fun ev(msg: String) { MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
     override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); ev("hub left view" + (if (floatPkg.isNotEmpty()) ", tucking Maps" else "")); if (floatPkg.isNotEmpty()) { tuckedPkg = floatPkg; MixService.inst?.minimizeFloating(floatPkg) } }
+    private fun mapsOnTop(): Boolean = try { floatPkg.isNotEmpty() && (MixService.inst?.floatBounds(floatPkg)?.let { it.width() > 300 && it.height() > 150 } == true) } catch (e: Exception) { false }
+
     /** After an update Android sometimes leaves the now-playing listener unbound; ask it to reconnect. */
     private fun rebindListener() {
         try { if (NowPlayingService.inst == null) android.service.notification.NotificationListenerService.requestRebind(android.content.ComponentName(this, NowPlayingService::class.java)) } catch (e: Exception) { }
@@ -836,7 +838,13 @@ class MainActivity : Activity() {
 
         @JavascriptInterface fun getApps(all: Boolean): String = try { Ops.musicApps(this@MainActivity, all).toString() } catch (e: Exception) { "[]" }
 
-        @JavascriptInterface fun launchApp(pkg: String): Boolean { lastOutLaunch = SystemClock.elapsedRealtime(); return Ops.launchApp(this@MainActivity, pkg) }
+        @JavascriptInterface fun launchApp(pkg: String): Boolean {
+            lastOutLaunch = SystemClock.elapsedRealtime()
+            if (!mapsOnTop()) return Ops.launchApp(this@MainActivity, pkg)
+            // Fold the Maps pop-up first (what pressing Home does), then open the app so Maps does not sit on top of it.
+            runOnUiThread { MixService.inst?.goHome(); ev("Folded Maps, then opening an app"); main.postDelayed({ Ops.launchApp(this@MainActivity, pkg) }, 700) }
+            return true
+        }
         /** Opens an app asking Android to size its window to this box (screen pixels). Honoured only when freeform windows are enabled. */
         @JavascriptInterface fun launchAppIn(pkg: String, l: Int, t: Int, r: Int, b: Int): Boolean {
             val i = packageManager.getLaunchIntentForPackage(pkg) ?: return false
