@@ -332,7 +332,7 @@ class MainActivity : Activity() {
     @Volatile var calLog = ""
 
     /** Samsung keeps a handle bar above the window, so the window itself can never start above ~44 px. */
-    private fun target(r: android.graphics.Rect): android.graphics.Rect = android.graphics.Rect(r.left + 7, Math.max(r.top, 24) + 2, r.right - 10, r.bottom - 4)
+    private fun target(r: android.graphics.Rect): android.graphics.Rect = android.graphics.Rect(r.left + 7, Math.max(r.top, 24) + 2, r.right - 10, r.bottom - 8)
     private fun adjusted(r0: android.graphics.Rect): android.graphics.Rect { val r = target(r0); return android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom) }
 
     private fun ringDrawable(): android.graphics.drawable.Drawable {
