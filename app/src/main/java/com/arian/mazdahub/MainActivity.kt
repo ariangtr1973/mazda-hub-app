@@ -316,13 +316,16 @@ class MainActivity : Activity() {
     private var lastRelaunchAt = 0L
     @Volatile private var paneRect: android.graphics.Rect? = null
     @Volatile private var sheetOpen = false
+    private var nudges = 0
+    private var gaveUp = false
+    private var lastNudgeFrom: android.graphics.Rect? = null
     private val shieldViews = ArrayList<android.view.View>()
     @Volatile private var ringHue = 205
     private var ringView: android.view.View? = null
     @Volatile var calLog = ""
 
     /** Samsung keeps a handle bar above the window, so the window itself can never start above ~44 px. */
-    private fun target(r: android.graphics.Rect): android.graphics.Rect = android.graphics.Rect(r.left + 7, Math.max(r.top, 44) + 1, r.right - 1, r.bottom - 4)
+    private fun target(r: android.graphics.Rect): android.graphics.Rect = android.graphics.Rect(r.left + 7, Math.max(r.top, 44) + 1, r.right - 10, r.bottom - 4)
     private fun adjusted(r0: android.graphics.Rect): android.graphics.Rect { val r = target(r0); return android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom) }
 
     private fun ringDrawable(): android.graphics.drawable.Drawable {
@@ -405,22 +408,34 @@ class MainActivity : Activity() {
                     val ex = Math.abs(b.left - want.left) + Math.abs(b.top - want.top) + Math.abs(b.right - want.right) + Math.abs(b.bottom - want.bottom)
                     calLog = "want [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "] actual [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] adj [" + adj.left + "," + adj.top + "," + adj.right + "," + adj.bottom + "]"
                     if (ex > 10) {
-                        if (++drift >= 2 && visible) {
+                        if (++drift >= 2 && visible && !sheetOpen && tuckedPkg.isEmpty() && !folding) {
                             drift = 0
-                            if (calib < 3) { calib++; val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom; if (Math.abs(dl) < 60 && Math.abs(dt) < 60 && Math.abs(dr) < 60 && Math.abs(db) < 60) { adj.left += dl; adj.top += dt; adj.right += dr; adj.bottom += db; saveAdj() } }
                             val nowMs = SystemClock.elapsedRealtime()
-                            if (nowMs - lastRelaunchAt > 2500) { lastRelaunchAt = nowMs; relaunchFloat(pk, adjusted(want0!!)) }
+                            if (nowMs - lastRelaunchAt > 2500) {
+                                if (nudges >= 3) {
+                                    if (!gaveUp) { gaveUp = true; ev("Maps will not move any closer, leaving it at [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] (wanted [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "])") }
+                                } else {
+                                    val prev = lastNudgeFrom
+                                    if (prev != null && prev != b && calib < 3) {
+                                        calib++
+                                        val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom
+                                        if (Math.abs(dl) < 40 && Math.abs(dt) < 40 && Math.abs(dr) < 40 && Math.abs(db) < 40) { adj.left = (adj.left + dl).coerceIn(-30, 30); adj.top = (adj.top + dt).coerceIn(-30, 30); adj.right = (adj.right + dr).coerceIn(-30, 30); adj.bottom = (adj.bottom + db).coerceIn(-30, 30) }
+                                    }
+                                    nudges++; lastNudgeFrom = android.graphics.Rect(b); lastRelaunchAt = nowMs
+                                    relaunchFloat(pk, adjusted(want0!!), nudges >= 2)
+                                }
+                            }
                         }
-                    } else drift = 0
+                    } else { drift = 0; nudges = 0; gaveUp = false; lastNudgeFrom = null }
                 }
             } catch (e: Exception) { }
             lockHandler.postDelayed(this, 600)
         }
     }
-    private fun relaunchFloat(pk: String, r: android.graphics.Rect) {
+    private fun relaunchFloat(pk: String, r: android.graphics.Rect, fresh: Boolean = false) {
         ev("nudging Maps to [" + r.left + "," + r.top + "," + r.right + "," + r.bottom + "], it was at " + (MixService.inst?.floatBounds(pk)?.let { "[" + it.left + "," + it.top + "," + it.right + "," + it.bottom + "]" } ?: "not showing"))
         val i = packageManager.getLaunchIntentForPackage(pk) ?: return
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (fresh) i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
         val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(r)
         try { startActivity(i, o.toBundle()) } catch (e: Exception) { }
     }
@@ -432,7 +447,7 @@ class MainActivity : Activity() {
     override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
     private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
-    private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj", "") ?: "").split(","); if (q.size == 4) adj.set(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) } catch (e: Exception) { } }
+    private fun loadAdj() { try { if (true) return; val q = (Ops.prefs(this).getString("float_adj", "") ?: "").split(","); if (q.size == 4) adj.set(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) } catch (e: Exception) { } }
     private fun loadFloat() { loadAdj(); try {
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
         if (Ops.prefs(this).getString("log_ver", "") != ver) { Ops.prefs(this).edit().remove("autolog").putString("log_ver", ver).apply(); MixService.events = emptyList() }
@@ -495,7 +510,7 @@ class MainActivity : Activity() {
     private fun restoreMaps() {
         val pk = tuckedPkg; val r = paneRect ?: floatRect
         if (pk.isEmpty() || r == null) return
-        tuckedPkg = ""; lastRestoreAt = SystemClock.elapsedRealtime()
+        tuckedPkg = ""; lastRestoreAt = SystemClock.elapsedRealtime(); nudges = 0; gaveUp = false; lastNudgeFrom = null
         ev("placing Maps on pane [" + adjusted(r).left + "," + adjusted(r).top + "," + adjusted(r).right + "," + adjusted(r).bottom + "]")
         main.postDelayed({ try {
             val i = packageManager.getLaunchIntentForPackage(pk)
@@ -507,7 +522,7 @@ class MainActivity : Activity() {
             val want = paneRect ?: floatRect ?: return@postDelayed
             val tg = target(want); val b = MixService.inst?.floatBounds(pk)
             if (b == null || b.width() < 300 || Math.abs(b.left - tg.left) + Math.abs(b.top - tg.top) + Math.abs(b.right - tg.right) + Math.abs(b.bottom - tg.bottom) > 10) {
-                ev("Maps not on its pane, putting it back"); lastRelaunchAt = SystemClock.elapsedRealtime(); relaunchFloat(pk, adjusted(want))
+                ev("Maps not on its pane, putting it back"); lastRelaunchAt = SystemClock.elapsedRealtime(); relaunchFloat(pk, adjusted(want), d >= 3800)
             }
         } catch (e: Exception) { } }, d)
     }
