@@ -145,7 +145,7 @@ class MainActivity : Activity() {
         setIntent(intent)
         if (intent?.getBooleanExtra("auto", false) == true) autoStart()
         // Home button = same as the X: close any hub screen that is open and put Maps back on its pane
-        else if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) {
+        else if (intent?.hasCategory(Intent.CATEGORY_HOME) == true && SystemClock.elapsedRealtime() > ignoreHomeUntil) {
             ev("Home pressed")
             pushJs("document.querySelectorAll('.picker.open').forEach(function(p){p.classList.remove('open')})")
             if (sheetOpen) { sheetOpen = false; if (tuckedPkg.isEmpty() && floatPkg.isNotEmpty()) tuckedPkg = floatPkg; restoreMaps() }
@@ -414,7 +414,7 @@ class MainActivity : Activity() {
                 if (hubStarted && b != null && want != null) {
                     val ex = Math.abs(b.left - want.left) + Math.abs(b.top - want.top) + Math.abs(b.right - want.right) + Math.abs(b.bottom - want.bottom)
                     calLog = "want [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "] actual [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] adj [" + adj.left + "," + adj.top + "," + adj.right + "," + adj.bottom + "]"
-                    if (ex > 70) {
+                    if (ex > 10) {
                         if (++drift >= 2 && visible && !sheetOpen && tuckedPkg.isEmpty() && !handingOver()) {
                             drift = 0
                             val nowMs = SystemClock.elapsedRealtime()
@@ -450,6 +450,7 @@ class MainActivity : Activity() {
     /** Leaving the hub: the floating Maps window steps back with it. */
     @Volatile var lastOutLaunch = 0L
     private var lastRestoreAt = 0L
+    @Volatile private var ignoreHomeUntil = 0L
     private fun handingOver(): Boolean = folding || SystemClock.elapsedRealtime() - lastOutLaunch < 12000
     private fun ev(msg: String) { Ops.log(this, "[hub] " + msg); MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
     override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
@@ -529,7 +530,9 @@ class MainActivity : Activity() {
             if (!hubStarted || sheetOpen || tuckedPkg.isNotEmpty() || handingOver()) return@postDelayed
             val want = paneRect ?: floatRect ?: return@postDelayed
             val tg = target(want); val b = MixService.inst?.floatBounds(pk)
-            if (b == null || b.width() < 300 || Math.abs(b.left - tg.left) + Math.abs(b.top - tg.top) + Math.abs(b.right - tg.right) + Math.abs(b.bottom - tg.bottom) > 70) {
+            if (b == null || b.width() < 300 || Math.abs(b.left - tg.left) + Math.abs(b.top - tg.top) + Math.abs(b.right - tg.right) + Math.abs(b.bottom - tg.bottom) > 10) {
+                if (nudges >= 3) return@postDelayed
+                nudges++
                 ev("Maps not on its pane, putting it back"); lastRelaunchAt = SystemClock.elapsedRealtime(); relaunchFloat(pk, adjusted(want), d >= 3800)
             }
         } catch (e: Exception) { } }, d)
@@ -1244,7 +1247,13 @@ class MainActivity : Activity() {
             runOnUiThread {
                 sheetOpen = true
                 val np = floatingNavPkg()
-                if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np); ev("Folded Maps for a hub screen") }
+                if (np.isNotEmpty()) {
+                    floatPkg = np; tuckedPkg = np
+                    ignoreHomeUntil = SystemClock.elapsedRealtime() + 3000
+                    MixService.inst?.goHome(); ev("Folded Maps for a hub screen (same as Home)")
+                    // if it is still showing a moment later, use the slower way
+                    main.postDelayed({ if (sheetOpen && floatingNavPkg().isNotEmpty()) { ev("Maps still showing over the hub screen, folding it again"); MixService.inst?.minimizeFloating(np) } }, 1800)
+                }
             }
         }
 
