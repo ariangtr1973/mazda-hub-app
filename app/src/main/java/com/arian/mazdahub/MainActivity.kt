@@ -264,6 +264,13 @@ class MainActivity : Activity() {
         say("Car connected. Waiting for the hotspot\u2026")
         rebindListener()
         Ops.log(this, "Waiting for the hotspot / internet. Now-playing listener " + (if (NowPlayingService.inst != null) "connected" else "NOT connected"))
+        // Warm-up: the music app needs about 20 s to get going on this tablet, so if the hotspot is not up yet, open it now instead of after the wait.
+        try {
+            val cm0 = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val up = cm0.getNetworkCapabilities(cm0.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+            val w0 = (Ops.prefs(this).getString("music_pkg", "") ?: "").let { if (Ops.ignorable(it)) "" else it }
+            if (!up && w0.isNotEmpty() && Ops.launchApp(this, w0)) Ops.log(this, "Hotspot not up yet: opened the music app early so it is ready")
+        } catch (e: Exception) { }
         waitOnline(id, 180_000) {
             if (id != runId) return@waitOnline
             say("Starting music\u2026")
@@ -286,7 +293,6 @@ class MainActivity : Activity() {
             val startedAt = SystemClock.elapsedRealtime()
             var lastTapAt = 0L      // when a button in the music app was last tapped (never tap twice in a row: the second tap would pause it again)
             var busySince = 0L      // when the app began loading / playing without sound yet
-            var wakeAt = -100       // try number when the player service was last asked to wake up
             fun attempt(n: Int) {
                 if (id != runId) return
                 val secs = (SystemClock.elapsedRealtime() - startedAt) / 1000
@@ -309,11 +315,8 @@ class MainActivity : Activity() {
                         if (n % 4 == 0) Ops.log(this, "Try " + n + ": app is starting the music, waiting")
                         main.postDelayed({ attempt(n + 1) }, 1200); return
                     }
-                    // No player yet, or the player went quiet: wake the app's player service the way a car system does (at the start, and once more at ~15 s).
-                    val wakeNow = (n == 0 && wakeAt < 0) || (n >= 12 && n - wakeAt >= 12)
-                    if (wakeNow) { wakeAt = n; Ops.log(this, "Try " + n + ": waking the music player: " + svc.wake(usedPkg)) }
-                    // The old voice-search request waits a few tries so the wake-up gets a chance first.
-                    if (n == (if (wakeAt >= 0) 4 else 1)) { Ops.log(this, "Try " + n + ": asked the app to play music (voice-search request): " + Ops.playFromSearch(this, usedPkg)) }
+                    // (The player-service wake-up was removed: Morphe refuses that connection.)
+                    if (n == 1) { Ops.log(this, "Try " + n + ": asked the app to play music (voice-search request): " + Ops.playFromSearch(this, usedPkg)) }
                     how = when {
                         n == 0 -> if (svc.resume(usedPkg)) "resume" else "no player yet"
                         n == 3 || n == 5 -> if (svc.playSaved(usedPkg)) "play last track by name" else "no player yet"
