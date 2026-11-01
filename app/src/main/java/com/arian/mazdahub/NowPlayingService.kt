@@ -190,6 +190,31 @@ class NowPlayingService : NotificationListenerService() {
     }
     private fun isPlayingPkg(pkg: String): Boolean = try { msm?.getActiveSessions(cn)?.any { it.packageName == pkg && isPlaying(it) } == true } catch (e: Exception) { false }
 
+    private fun liveSessions(): List<MediaController> = try { msm?.getActiveSessions(cn) } catch (e: Exception) { null } ?: all
+
+    /** True while this app is already starting playback (loading / buffering / playing), so the car start-up should wait instead of pressing buttons again. */
+    fun busy(pkg: String): Boolean = liveSessions().any {
+        it.packageName == pkg && when (it.playbackState?.state) {
+            PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING -> true
+            else -> false
+        }
+    }
+
+    /** One line for the log: which apps have a player session right now and what state each is in. */
+    fun sessionsInfo(): String {
+        val s = liveSessions()
+        if (s.isEmpty()) return "no player sessions"
+        return s.joinToString(", ") {
+            val st = when (it.playbackState?.state) {
+                PlaybackState.STATE_PLAYING -> "playing"; PlaybackState.STATE_PAUSED -> "paused"
+                PlaybackState.STATE_BUFFERING -> "buffering"; PlaybackState.STATE_CONNECTING -> "connecting"
+                PlaybackState.STATE_STOPPED -> "stopped"; PlaybackState.STATE_NONE, null -> "none"
+                else -> "other"
+            }
+            it.packageName.substringAfterLast('.') + "=" + st
+        }
+    }
+
     private fun push() {
         val c = current
         val o = JSONObject()

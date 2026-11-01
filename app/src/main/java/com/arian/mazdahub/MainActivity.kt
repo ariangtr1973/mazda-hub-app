@@ -279,28 +279,53 @@ class MainActivity : Activity() {
                 }
             }
             if (used == null) { Ops.log(this, "No music app could be opened"); say("No music app found. Pick one in the music picker."); return@waitOnline }
-            Ops.log(this, "Opened " + used + ", will press play in " + prefs.getInt("delay_s", 8) + " s")
+            Ops.log(this, "Opened " + used + ", starting music in 1 s")
             val delay = 1000L
             // Keep trying for ~60 s: a freshly opened music app needs a while before it has a player to press play on.
             val usedPkg: String = used
+            val startedAt = SystemClock.elapsedRealtime()
+            var lastTapAt = 0L      // when a button in the music app was last tapped (never tap twice in a row: the second tap would pause it again)
+            var busySince = 0L      // when the app began loading / playing without sound yet
+            var wakeAt = -100       // try number when the player service was last asked to wake up
             fun attempt(n: Int) {
                 if (id != runId) return
+                val secs = (SystemClock.elapsedRealtime() - startedAt) / 1000
                 if (Ops.musicActive(this)) {
-                    bringHubToFront(id); Ops.log(this, "Music is playing (try " + n + "). Back to the hub"); say("Playing"); return
+                    bringHubToFront(id); Ops.log(this, "Music is playing (try " + n + ", " + secs + " s after opening). Back to the hub"); say("Playing"); return
                 }
                 if (n >= 50) {
-                    bringHubToFront(id); Ops.log(this, "Music still silent after 50 tries. Back to the hub"); say("Music app opened. Press play if it is quiet."); return
+                    bringHubToFront(id); Ops.log(this, "Music still silent after 50 tries. Players: " + (NowPlayingService.inst?.sessionsInfo() ?: "no listener") + ". Back to the hub"); say("Music app opened. Press play if it is quiet."); return
                 }
                 val svc = NowPlayingService.inst
+                val now = SystemClock.elapsedRealtime()
                 var how: String
                 if (svc == null) { Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); how = "no listener, media key" }
                 else {
-                    // Quickest route first: resume what is queued; if the app is cold, tap through it like a person would.
-                    if (n == 1) { Ops.log(this, "Try 1: asked the app to play music (voice-search request): " + Ops.playFromSearch(this, usedPkg)) }
+                    if (n % 6 == 0) Ops.log(this, "Try " + n + " (" + secs + " s): players: " + svc.sessionsInfo())
+                    // The app is already loading or starting the song: give it time instead of pressing more buttons (a second tap would pause it).
+                    val busy = svc.busy(usedPkg)
+                    if (busy) { if (busySince == 0L) busySince = now } else busySince = 0L
+                    if (busy && now - busySince < 10_000) {
+                        if (n % 4 == 0) Ops.log(this, "Try " + n + ": app is starting the music, waiting")
+                        main.postDelayed({ attempt(n + 1) }, 1200); return
+                    }
+                    // No player yet, or the player went quiet: wake the app's player service the way a car system does (at the start, and once more at ~15 s).
+                    val wakeNow = (n == 0 && wakeAt < 0) || (n >= 12 && n - wakeAt >= 12)
+                    if (wakeNow) { wakeAt = n; Ops.log(this, "Try " + n + ": waking the music player: " + svc.wake(usedPkg)) }
+                    // The old voice-search request waits a few tries so the wake-up gets a chance first.
+                    if (n == (if (wakeAt >= 0) 4 else 1)) { Ops.log(this, "Try " + n + ": asked the app to play music (voice-search request): " + Ops.playFromSearch(this, usedPkg)) }
                     how = when {
                         n == 0 -> if (svc.resume(usedPkg)) "resume" else "no player yet"
                         n == 3 || n == 5 -> if (svc.playSaved(usedPkg)) "play last track by name" else "no player yet"
-                        n % 2 == 0 -> { val t = MixService.inst?.tapPlay(usedPkg) ?: ""; if (t.isNotEmpty() || n % 8 == 0) Ops.log(this, "Try " + n + ": tapped " + (if (t.isEmpty()) "nothing" else t)); "tap" }
+                        n % 2 == 0 -> {
+                            if (now - lastTapAt < 7000) "tap skipped (just tapped)"
+                            else {
+                                val t = MixService.inst?.tapPlay(usedPkg) ?: ""
+                                if (t.isNotEmpty()) lastTapAt = now
+                                if (t.isNotEmpty() || n % 8 == 0) Ops.log(this, "Try " + n + ": tapped " + (if (t.isEmpty()) "nothing" else t))
+                                "tap"
+                            }
+                        }
                         else -> if (svc.resume(usedPkg)) "resume" else "no player yet"
                     }
                 }
