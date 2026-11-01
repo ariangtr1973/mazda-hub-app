@@ -407,7 +407,7 @@ class MainActivity : Activity() {
                 if (hubStarted && b != null && want != null) {
                     val ex = Math.abs(b.left - want.left) + Math.abs(b.top - want.top) + Math.abs(b.right - want.right) + Math.abs(b.bottom - want.bottom)
                     calLog = "want [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "] actual [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] adj [" + adj.left + "," + adj.top + "," + adj.right + "," + adj.bottom + "]"
-                    if (ex > 10) {
+                    if (ex > 70) {
                         if (++drift >= 2 && visible && !sheetOpen && tuckedPkg.isEmpty() && !folding) {
                             drift = 0
                             val nowMs = SystemClock.elapsedRealtime()
@@ -521,7 +521,7 @@ class MainActivity : Activity() {
             if (!hubStarted || sheetOpen || tuckedPkg.isNotEmpty()) return@postDelayed
             val want = paneRect ?: floatRect ?: return@postDelayed
             val tg = target(want); val b = MixService.inst?.floatBounds(pk)
-            if (b == null || b.width() < 300 || Math.abs(b.left - tg.left) + Math.abs(b.top - tg.top) + Math.abs(b.right - tg.right) + Math.abs(b.bottom - tg.bottom) > 10) {
+            if (b == null || b.width() < 300 || Math.abs(b.left - tg.left) + Math.abs(b.top - tg.top) + Math.abs(b.right - tg.right) + Math.abs(b.bottom - tg.bottom) > 70) {
                 ev("Maps not on its pane, putting it back"); lastRelaunchAt = SystemClock.elapsedRealtime(); relaunchFloat(pk, adjusted(want), d >= 3800)
             }
         } catch (e: Exception) { } }, d)
