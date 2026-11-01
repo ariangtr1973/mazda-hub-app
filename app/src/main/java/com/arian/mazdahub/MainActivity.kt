@@ -422,7 +422,6 @@ class MainActivity : Activity() {
                                 if (nudges >= 3) {
                                     if (!gaveUp) { gaveUp = true; adj.set(0, 0, 0, 0); ev("Maps will not move any closer, leaving it at [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] (wanted [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "])") }
                                 } else nudgeMaps(pk, b, want0!!)
-                                }
                             }
                         }
                     } else { drift = 0; if (nudges > 0) { ev("Maps is on its pane, remembering the correction [" + adj.left + "," + adj.top + "," + adj.right + "," + adj.bottom + "]"); saveAdj() }; nudges = 0; gaveUp = false; lastNudgeFrom = null }
