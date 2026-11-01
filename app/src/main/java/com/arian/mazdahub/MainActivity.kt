@@ -144,6 +144,13 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent?.getBooleanExtra("auto", false) == true) autoStart()
+        // Home button = same as the X: close any hub screen that is open and put Maps back on its pane
+        else if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) {
+            ev("Home pressed")
+            pushJs("document.querySelectorAll('.picker.open').forEach(function(p){p.classList.remove('open')})")
+            if (sheetOpen) { sheetOpen = false; if (tuckedPkg.isEmpty() && floatPkg.isNotEmpty()) tuckedPkg = floatPkg; restoreMaps() }
+            else main.postDelayed({ try { recoverMaps() } catch (e: Exception) { } }, 900)
+        }
     }
 
     // ---------------- car auto start: wait for internet, open the music app, press play ----------------
