@@ -952,6 +952,8 @@
           <button class="srow" id="p-awake"><span>Keep screen on</span><span class="st" id="s-awake"></span></button>
           <details class="diag"><summary>Advanced</summary>
             <button class="srow" id="p-night"><span>Night dimming (Auto = after dark)</span><span class="st" id="s-night"></span></button>
+            <button class="srow" id="p-report"><span>Copy report (then paste it into your chat with Claude)</span><span class="st">Copy</span></button>
+            <button class="srow" id="p-clearlog"><span>Clear the log</span><span class="st">Clear</span></button>
             <button class="srow" id="p-backup"><span>Back up settings to a file (choose Google Drive)</span><span class="st">Save</span></button>
             <button class="srow" id="p-restore"><span>Restore settings from a backup file</span><span class="st">Open</span></button>
             <button class="srow" id="p-navmode"><span>Where to? starts navigation in</span><span class="st" id="s-navmode"></span></button>
@@ -1827,6 +1829,24 @@
     try { localStorage.setItem('hub-night', next); } catch (e) { }
     window.hubApplyNight(); renderSetup();
   });
+
+  // ---- Copy a tidy report to the clipboard ----
+  function buildReport() {
+    const g = f => { try { return String(H()[f]()); } catch (e) { return '(n/a)'; } };
+    const nl = x => x.split(' | ').join('\n   ');
+    return ['MAZDA HUB REPORT  v' + g('getVersion') + '  ' + new Date().toLocaleString(), '',
+      'MAP WINDOW', '   ' + nl(g('getFloatCal')), '',
+      'MAPS / HELPER', '   ' + nl(g('getMixStatus').split(' ; ').join('\n   ')), '',
+      'LOG (newest first)', g('getAutoLog').split('\n').map(x => '   ' + x).join('\n'), '',
+      'NAVIGATION', '   ' + nl(g('getNavDebug')), '',
+      'MUSIC', '   ' + nl(g('getTrackDebug'))].join('\n');
+  }
+  $('p-report').addEventListener('click', () => {
+    if (!NATIVE) { toast('Works in the Mazda Hub app'); return; }
+    const r = buildReport();
+    try { H().copyText(r); toast('Report copied. Paste it into your chat.'); } catch (e) { toast('Could not copy'); }
+  });
+  $('p-clearlog').addEventListener('click', () => { try { H().clearLog(); toast('Log cleared'); } catch (e) { } try { window.hubRefreshLog && window.hubRefreshLog(); } catch (e) { } });
 
   // ---- Backup and restore of settings (file picker lets you choose the Google Drive folder) ----
   $('p-backup').addEventListener('click', () => {

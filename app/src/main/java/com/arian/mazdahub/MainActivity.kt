@@ -418,6 +418,7 @@ class MainActivity : Activity() {
         }
     }
     private fun relaunchFloat(pk: String, r: android.graphics.Rect) {
+        ev("nudging Maps to [" + r.left + "," + r.top + "," + r.right + "," + r.bottom + "], it was at " + (MixService.inst?.floatBounds(pk)?.let { "[" + it.left + "," + it.top + "," + it.right + "," + it.bottom + "]" } ?: "not showing"))
         val i = packageManager.getLaunchIntentForPackage(pk) ?: return
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(r)
@@ -426,12 +427,17 @@ class MainActivity : Activity() {
     private var tuckedPkg = ""
     /** Leaving the hub: the floating Maps window steps back with it. */
     @Volatile var lastOutLaunch = 0L
-    private fun ev(msg: String) { MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
+    private var lastRestoreAt = 0L
+    private fun ev(msg: String) { Ops.log(this, "[hub] " + msg); MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
     override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
     private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
     private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj", "") ?: "").split(","); if (q.size == 4) adj.set(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) } catch (e: Exception) { } }
     private fun loadFloat() { loadAdj(); try {
+        val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
+        if (Ops.prefs(this).getString("log_ver", "") != ver) { Ops.prefs(this).edit().remove("autolog").putString("log_ver", ver).apply(); MixService.events = emptyList() }
+    } catch (e: Exception) { }
+    try {
         val p = Ops.prefs(this); val pk = p.getString("float_pkg", "") ?: ""; val q = (p.getString("float_rect", "") ?: "").split(",")
         if (pk.isNotEmpty() && q.size == 4) { floatPkg = pk; floatRect = android.graphics.Rect(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) }
     } catch (e: Exception) { } }
@@ -475,11 +481,22 @@ class MainActivity : Activity() {
         if (pk.isNotEmpty() && r != null && !justLaunched && !sheetOpen) restoreMaps()
     }
 
+    /** The hub is on screen and in front (Home, or back from Recents) but Maps is not on its pane: bring it back. */
+    private fun recoverMaps() {
+        val now = SystemClock.elapsedRealtime()
+        if (!hubStarted || sheetOpen || folding || floatPkg.isEmpty() || tuckedPkg.isNotEmpty()) return
+        if (now - lastOutLaunch < 5000 || now - lastRestoreAt < 4000) return
+        if (floatingNavPkg().isNotEmpty()) return
+        ev("hub in front but Maps not on its pane, bringing it back")
+        tuckedPkg = floatPkg; restoreMaps()
+    }
+
     /** Puts the Maps window back on the map pane (the pane's current position, measured live). */
     private fun restoreMaps() {
         val pk = tuckedPkg; val r = paneRect ?: floatRect
         if (pk.isEmpty() || r == null) return
-        tuckedPkg = ""
+        tuckedPkg = ""; lastRestoreAt = SystemClock.elapsedRealtime()
+        ev("placing Maps on pane [" + adjusted(r).left + "," + adjusted(r).top + "," + adjusted(r).right + "," + adjusted(r).bottom + "]")
         main.postDelayed({ try {
             val i = packageManager.getLaunchIntentForPackage(pk)
             if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(adjusted(r)); startActivity(i, o.toBundle()) }
@@ -765,6 +782,7 @@ class MainActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) goImmersive()
+        if (hasFocus) main.postDelayed({ try { recoverMaps() } catch (e: Exception) { } }, 1200)
     }
 
     private fun audio() = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
@@ -1229,6 +1247,8 @@ class MainActivity : Activity() {
             } catch (e: Exception) { false }
         }
         @JavascriptInterface fun setThemeHue(h: Int) { ringHue = h; }
+        @JavascriptInterface fun copyText(s: String) { runOnUiThread { try { (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Mazda Hub report", s)) } catch (e: Exception) { } } }
+        @JavascriptInterface fun clearLog() { Ops.prefs(this@MainActivity).edit().remove("autolog").apply(); MixService.events = emptyList() }
         @JavascriptInterface fun getAutoLog(): String = Ops.prefs(this@MainActivity).getString("autolog", "") ?: ""
         @JavascriptInterface fun getFloatCal(): String = calLog
         @JavascriptInterface fun getHideBars(): Boolean = Ops.prefs(this@MainActivity).getBoolean("hide_bars", false)
