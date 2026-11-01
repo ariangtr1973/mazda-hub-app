@@ -257,6 +257,7 @@ class MainActivity : Activity() {
     private fun say(msg: String) { js("window.hub&&hub.autoStatus&&hub.autoStatus(" + JSONObject.quote(msg) + ")") }
 
     fun autoStart() {
+        Ops.cancelSleep(this)
         autoStop(quiet = true)
         val id = ++runId
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -360,7 +361,14 @@ class MainActivity : Activity() {
     @Volatile var calLog = ""
 
     /** Samsung keeps a handle bar above the window, so the window itself can never start above ~44 px. */
-    private fun target(r: android.graphics.Rect): android.graphics.Rect = android.graphics.Rect(r.left + 7, Math.max(r.top, 24) + 2, r.right - 10, r.bottom - 8)
+    private var minW = 0
+    private var minH = 0   // smallest window Maps accepts on this tablet (learned the first time it refuses to shrink)
+    private fun target(r: android.graphics.Rect): android.graphics.Rect {
+        val t = android.graphics.Rect(r.left + 7, Math.max(r.top, 24) + 2, r.right - 10, r.bottom - 8)
+        if (minW > 0 && t.width() < minW) t.right = t.left + minW
+        if (minH > 0 && t.height() < minH) t.bottom = t.top + minH
+        return t
+    }
     private fun adjusted(r0: android.graphics.Rect): android.graphics.Rect { val r = target(r0); return android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom) }
 
     private fun ringDrawable(): android.graphics.drawable.Drawable {
@@ -448,7 +456,12 @@ class MainActivity : Activity() {
                             val nowMs = SystemClock.elapsedRealtime()
                             if (nowMs - lastRelaunchAt > 2500) {
                                 if (nudges >= 3) {
-                                    if (!gaveUp) { gaveUp = true; adj.set(0, 0, 0, 0); ev("Maps will not move any closer, leaving it at [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] (wanted [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "])") }
+                                    if (!gaveUp) {
+                                        gaveUp = true; adj.set(0, 0, 0, 0)
+                                        // Maps would not get smaller than this: remember it, so next time the pane is asked for exactly that size and no more nudging is needed
+                                        if ((b.width() > want.width() || b.height() > want.height()) && b.width() - want.width() <= 40 && b.height() - want.height() <= 40) { minW = Math.max(minW, b.width()).coerceAtMost(1100); minH = Math.max(minH, b.height()).coerceAtMost(700); saveMin() }
+                                        ev("Maps will not get smaller than [" + b.width() + " x " + b.height() + "], using that size from now on (wanted [" + want.width() + " x " + want.height() + "])")
+                                    }
                                 } else nudgeMaps(pk, b, want0!!)
                             }
                         }
@@ -460,6 +473,7 @@ class MainActivity : Activity() {
     }
     /** Ask Maps for the pane again; when it landed somewhere else, learn the constant difference (window frame) and correct for it. */
     private fun nudgeMaps(pk: String, b: android.graphics.Rect?, want0: android.graphics.Rect) {
+        if (Ops.sleeping()) return
         val tg = target(want0)
         if (b != null) {
             val dl = tg.left - b.left; val dt = tg.top - b.top; val dr = tg.right - b.right; val db = tg.bottom - b.bottom
@@ -479,6 +493,7 @@ class MainActivity : Activity() {
         try { startActivity(i, o.toBundle()) } catch (e: Exception) { }
     }
     private var tuckedPkg = ""
+    private var restoreWaits = 0
     /** Leaving the hub: the floating Maps window steps back with it. */
     @Volatile var lastOutLaunch = 0L
     private var lastRestoreAt = 0L
@@ -487,9 +502,11 @@ class MainActivity : Activity() {
     private fun ev(msg: String) { Ops.log(this, "[hub] " + msg); MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
     override fun onStop() { super.onStop(); hubStarted = false; paneRect = null; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
+    private fun saveMin() { try { Ops.prefs(this).edit().putString("maps_min", minW.toString() + "," + minH).apply() } catch (e: Exception) { } }
+    private fun loadMin() { try { val q = (Ops.prefs(this).getString("maps_min", "") ?: "").split(","); if (q.size == 2) { minW = q[0].toInt(); minH = q[1].toInt() } } catch (e: Exception) { } }
     private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj3", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
     private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj3", "") ?: "").split(","); if (q.size == 4) adj.set(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) } catch (e: Exception) { } }
-    private fun loadFloat() { loadAdj(); try {
+    private fun loadFloat() { loadAdj(); loadMin(); try {
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
         if (Ops.prefs(this).getString("log_ver", "") != ver) { Ops.prefs(this).edit().remove("autolog").putString("log_ver", ver).apply(); MixService.events = emptyList() }
     } catch (e: Exception) { }
@@ -531,6 +548,7 @@ class MainActivity : Activity() {
         super.onStart()
         rebindListener()
         pushJs("window.hubReportPane && window.hubReportPane()")
+        restoreWaits = 0
         hubStarted = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 1500)
         val pk = tuckedPkg; val r = paneRect ?: floatRect
         val justLaunched = SystemClock.elapsedRealtime() - lastOutLaunch < 5000
@@ -541,7 +559,7 @@ class MainActivity : Activity() {
     /** The hub is on screen and in front (Home, or back from Recents) but Maps is not on its pane: bring it back. */
     private fun recoverMaps() {
         val now = SystemClock.elapsedRealtime()
-        if (!hubStarted || sheetOpen || handingOver() || floatPkg.isEmpty() || tuckedPkg.isNotEmpty()) return
+        if (!hubStarted || sheetOpen || handingOver() || floatPkg.isEmpty() || tuckedPkg.isNotEmpty() || Ops.sleeping()) return
         if ( now - lastRestoreAt < 4000) return
         if (floatingNavPkg().isNotEmpty()) return
         ev("hub in front but Maps not on its pane, bringing it back")
@@ -551,11 +569,18 @@ class MainActivity : Activity() {
     /** Puts the Maps window back on the map pane (the pane's current position, measured live). */
     private fun restoreMaps() {
         val pk = tuckedPkg; val r = paneRect ?: floatRect
-        if (pk.isEmpty() || r == null) return
+        if (pk.isEmpty() || Ops.sleeping()) return
+        if (r == null) {
+            // The page has not told us where the pane is yet (it re-measures after every return). Try again shortly instead of waiting for a Home press.
+            if (restoreWaits++ < 12) main.postDelayed({ try { if (hubStarted && !sheetOpen && !handingOver() && tuckedPkg.isNotEmpty()) restoreMaps() } catch (e: Exception) { } }, 600)
+            return
+        }
+        restoreWaits = 0
         tuckedPkg = ""; lastRestoreAt = SystemClock.elapsedRealtime(); nudges = 0; gaveUp = false; lastNudgeFrom = null
         ev("placing Maps on pane [" + adjusted(r).left + "," + adjusted(r).top + "," + adjusted(r).right + "," + adjusted(r).bottom + "]")
         // wait for the page to measure the pane afresh (the saved rectangle can be stale after the hub was closed and reopened)
         main.postDelayed({ try {
+            if (Ops.sleeping()) return@postDelayed
             val i = packageManager.getLaunchIntentForPackage(pk)
             val rr = paneRect ?: floatRect ?: r
             if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(adjusted(rr)); startActivity(i, o.toBundle()) }
@@ -1220,7 +1245,7 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun setKeepAwake(on: Boolean) {
             runOnUiThread {
-                if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                if (on && !Ops.sleeping()) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
@@ -1265,6 +1290,9 @@ class MainActivity : Activity() {
                     val loc = IntArray(2); web.getLocationOnScreen(loc)
                     val nr = android.graphics.Rect(l + loc[0], t + loc[1], r + loc[0], b + loc[1])
                     paneRect = nr
+                    if (tuckedPkg.isNotEmpty() && hubStarted && !sheetOpen && !handingOver() && SystemClock.elapsedRealtime() - lastOutLaunch >= 5000) {
+                        ev("pane measured, bringing Maps back"); restoreMaps()
+                    }
                     if (floatPkg.isNotEmpty()) {
                         val fr = floatRect
                         val moved = if (fr == null) 999 else Math.abs(fr.left - nr.left) + Math.abs(fr.top - nr.top) + Math.abs(fr.right - nr.right) + Math.abs(fr.bottom - nr.bottom)

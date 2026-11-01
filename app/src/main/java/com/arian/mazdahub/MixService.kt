@@ -93,6 +93,9 @@ class MixService : AccessibilityService() {
     /** Same as pressing the Home button: Samsung folds floating pop-up windows into their bubbles. */
     fun goHome() { performGlobalAction(GLOBAL_ACTION_HOME) }
 
+    /** Same as pressing the power button: the screen goes dark. Used after the car turns off if the screen stays lit. */
+    fun lockScreen(): Boolean = if (android.os.Build.VERSION.SDK_INT >= 28) performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) else false
+
     /** Last resort, same as doing it by hand: open Recents, swipe the Maps card away, go back to the app you were in. */
     private fun closeViaRecents(pkg: String) {
         performGlobalAction(GLOBAL_ACTION_RECENTS)

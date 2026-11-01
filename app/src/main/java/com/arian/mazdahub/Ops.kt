@@ -91,6 +91,7 @@ object Ops {
 
     /** Older versions left the tablet stuck at a 15 second timeout after the car turned off; undo that. */
     fun fixStuckTimeout(c: Context) {
+        if (sleeping()) return   // the short timeout is on purpose for the next minute or so after the car turns off
         try {
             if (Settings.System.canWrite(c) && Settings.System.getInt(c.contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, 0) == 15000) {
                 restoreTimeout(c); log(c, "Screen timeout was stuck at 15 seconds; put back to normal")
@@ -227,16 +228,75 @@ object Ops {
     private fun resetIntent(c: Context): PendingIntent =
         PendingIntent.getBroadcast(c, 77, Intent(c, ResetReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-    fun scheduleReset(c: Context) {
-        try { (c.getSystemService(Context.ALARM_SERVICE) as AlarmManager).set(AlarmManager.RTC, System.currentTimeMillis() + 5L * 3600 * 1000, resetIntent(c)) } catch (e: Exception) { }
+    fun scheduleReset(c: Context, afterMs: Long = 5L * 3600 * 1000) {
+        try { (c.getSystemService(Context.ALARM_SERVICE) as AlarmManager).set(AlarmManager.RTC, System.currentTimeMillis() + afterMs, resetIntent(c)) } catch (e: Exception) { }
     }
 
     fun cancelReset(c: Context) {
         try { (c.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(resetIntent(c)) } catch (e: Exception) { }
     }
 
+    // ---- car turned off: let the screen go dark ----
+    /** For about two minutes after the car turns off nothing (keep-awake, Maps placing) may keep the screen lit. */
+    @Volatile var sleepUntil = 0L
+    fun sleeping(): Boolean = android.os.SystemClock.elapsedRealtime() < sleepUntil
+    private val sleepHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var screenOffRx: android.content.BroadcastReceiver? = null
+    private var disconnectAt = 0L
+
+    private fun dropScreenOffRx(c: Context) {
+        val rx = screenOffRx ?: return
+        screenOffRx = null
+        try { c.applicationContext.unregisterReceiver(rx) } catch (e: Exception) { }
+    }
+
+    /** Stop the shut-down sequence without touching the timeout (used when the car comes back). */
+    fun cancelSleep(c: Context) {
+        sleepHandler.removeCallbacksAndMessages(null)
+        dropScreenOffRx(c)
+        sleepUntil = 0L
+    }
+
+    /** Shut-down sequence finished (or gave up): put the normal screen timeout back. */
+    private fun endSleep(c: Context, why: String) {
+        cancelSleep(c)
+        cancelReset(c)
+        restoreTimeout(c)
+        log(c, why)
+    }
+
+    private fun lockScreenNow(c: Context) {
+        val pm = c.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isInteractive) return
+        val ok = MixService.inst?.lockScreen()
+        log(c, "Screen still on " + ((android.os.SystemClock.elapsedRealtime() - disconnectAt) / 1000) + " s after the car turned off: asking Android to lock it" +
+            (when (ok) { null -> " (Accessibility helper is not running, cannot)"; true -> ""; else -> " (Android refused)" }))
+    }
+
+    private fun startSleep(c: Context) {
+        val app = c.applicationContext
+        cancelSleep(app)
+        disconnectAt = android.os.SystemClock.elapsedRealtime()
+        sleepUntil = disconnectAt + 120_000
+        val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isInteractive) { endSleep(app, "Screen was already off; timeout put back to normal"); return }
+        rememberTimeout(app)
+        setScreenTimeout(app, 15000)          // screen goes dark about 15 s after the last touch
+        scheduleReset(app, 4 * 60 * 1000L)    // if this app is killed meanwhile, Android puts the normal timeout back
+        val rx = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context, i: Intent) {
+                endSleep(app, "Screen went off " + ((android.os.SystemClock.elapsedRealtime() - disconnectAt) / 1000) + " s after the car turned off; timeout put back to normal")
+            }
+        }
+        screenOffRx = rx
+        try { app.registerReceiver(rx, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF)) } catch (e: Exception) { screenOffRx = null }
+        sleepHandler.postDelayed({ lockScreenNow(app) }, 20_000)
+        sleepHandler.postDelayed({ endSleep(app, "Screen still on 90 s after the car turned off; timeout put back to normal") }, 90_000)
+    }
+
     // ---- car Bluetooth events ----
     fun onCarConnected(c: Context) {
+        cancelSleep(c)
         log(c, "Waking screen, opening the hub" + (if (Settings.canDrawOverlays(c)) "" else " (Display over other apps is OFF: Android may block this)"))
         rememberTimeout(c)
         setScreenTimeout(c, 4 * 60 * 60 * 1000)
@@ -251,8 +311,8 @@ object Ops {
     fun onCarDisconnected(c: Context) {
         log(c, "Pausing music, screen will sleep")
         cancelReset(c)
+        startSleep(c)                         // marks the shut-down window first, so keep-awake and Maps placing stand down
         MainActivity.live?.autoStop()
         mediaKey(c, KeyEvent.KEYCODE_MEDIA_PAUSE)
-        restoreTimeout(c)
     }
 }
