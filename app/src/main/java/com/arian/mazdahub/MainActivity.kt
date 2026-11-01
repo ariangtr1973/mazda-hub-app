@@ -420,24 +420,29 @@ class MainActivity : Activity() {
                             val nowMs = SystemClock.elapsedRealtime()
                             if (nowMs - lastRelaunchAt > 2500) {
                                 if (nudges >= 3) {
-                                    if (!gaveUp) { gaveUp = true; ev("Maps will not move any closer, leaving it at [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] (wanted [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "])") }
-                                } else {
-                                    val prev = lastNudgeFrom
-                                    if (prev != null && prev != b && calib < 0) {
-                                        calib++
-                                        val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom
-                                        if (Math.abs(dl) < 40 && Math.abs(dt) < 40 && Math.abs(dr) < 40 && Math.abs(db) < 40) { adj.left = (adj.left + dl).coerceIn(-30, 30); adj.top = (adj.top + dt).coerceIn(-30, 30); adj.right = (adj.right + dr).coerceIn(-30, 30); adj.bottom = (adj.bottom + db).coerceIn(-30, 30) }
-                                    }
-                                    nudges++; lastNudgeFrom = android.graphics.Rect(b); lastRelaunchAt = nowMs
-                                    relaunchFloat(pk, adjusted(want0!!), nudges >= 2)
+                                    if (!gaveUp) { gaveUp = true; adj.set(0, 0, 0, 0); ev("Maps will not move any closer, leaving it at [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] (wanted [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "])") }
+                                } else nudgeMaps(pk, b, want0!!)
                                 }
                             }
                         }
-                    } else { drift = 0; nudges = 0; gaveUp = false; lastNudgeFrom = null }
+                    } else { drift = 0; if (nudges > 0) { ev("Maps is on its pane, remembering the correction [" + adj.left + "," + adj.top + "," + adj.right + "," + adj.bottom + "]"); saveAdj() }; nudges = 0; gaveUp = false; lastNudgeFrom = null }
                 }
             } catch (e: Exception) { }
             lockHandler.postDelayed(this, 600)
         }
+    }
+    /** Ask Maps for the pane again; when it landed somewhere else, learn the constant difference (window frame) and correct for it. */
+    private fun nudgeMaps(pk: String, b: android.graphics.Rect?, want0: android.graphics.Rect) {
+        val tg = target(want0)
+        if (b != null) {
+            val dl = tg.left - b.left; val dt = tg.top - b.top; val dr = tg.right - b.right; val db = tg.bottom - b.bottom
+            if (Math.abs(dl) < 45 && Math.abs(dt) < 45 && Math.abs(dr) < 45 && Math.abs(db) < 45) {
+                adj.left = (adj.left + dl).coerceIn(-45, 45); adj.top = (adj.top + dt).coerceIn(-45, 45)
+                adj.right = (adj.right + dr).coerceIn(-45, 45); adj.bottom = (adj.bottom + db).coerceIn(-45, 45)
+            }
+        }
+        nudges++; lastNudgeFrom = b?.let { android.graphics.Rect(it) }; lastRelaunchAt = SystemClock.elapsedRealtime()
+        relaunchFloat(pk, adjusted(want0), b != null)
     }
     private fun relaunchFloat(pk: String, r: android.graphics.Rect, fresh: Boolean = false) {
         ev("nudging Maps to [" + r.left + "," + r.top + "," + r.right + "," + r.bottom + "], it was at " + (MixService.inst?.floatBounds(pk)?.let { "[" + it.left + "," + it.top + "," + it.right + "," + it.bottom + "]" } ?: "not showing"))
@@ -455,8 +460,8 @@ class MainActivity : Activity() {
     private fun ev(msg: String) { Ops.log(this, "[hub] " + msg); MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
     override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
-    private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
-    private fun loadAdj() { try { if (true) return; val q = (Ops.prefs(this).getString("float_adj", "") ?: "").split(","); if (q.size == 4) adj.set(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) } catch (e: Exception) { } }
+    private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj2", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
+    private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj2", "") ?: "").split(","); if (q.size == 4) adj.set(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) } catch (e: Exception) { } }
     private fun loadFloat() { loadAdj(); try {
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
         if (Ops.prefs(this).getString("log_ver", "") != ver) { Ops.prefs(this).edit().remove("autolog").putString("log_ver", ver).apply(); MixService.events = emptyList() }
@@ -532,8 +537,7 @@ class MainActivity : Activity() {
             val tg = target(want); val b = MixService.inst?.floatBounds(pk)
             if (b == null || b.width() < 300 || Math.abs(b.left - tg.left) + Math.abs(b.top - tg.top) + Math.abs(b.right - tg.right) + Math.abs(b.bottom - tg.bottom) > 10) {
                 if (nudges >= 3) return@postDelayed
-                nudges++
-                ev("Maps not on its pane, putting it back"); lastRelaunchAt = SystemClock.elapsedRealtime(); relaunchFloat(pk, adjusted(want), d >= 3800)
+                ev("Maps not on its pane, putting it back"); nudgeMaps(pk, if (b != null && b.width() > 300) b else null, want)
             }
         } catch (e: Exception) { } }, d)
     }
