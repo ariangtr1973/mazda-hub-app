@@ -322,7 +322,7 @@ class MainActivity : Activity() {
     @Volatile var calLog = ""
 
     /** Samsung keeps a handle bar above the window, so the window itself can never start above ~44 px. */
-    private fun target(r: android.graphics.Rect): android.graphics.Rect = android.graphics.Rect(r.left, Math.max(r.top, 44), r.right, r.bottom - 4)
+    private fun target(r: android.graphics.Rect): android.graphics.Rect = android.graphics.Rect(r.left + 7, Math.max(r.top, 44) + 1, r.right - 1, r.bottom - 4)
     private fun adjusted(r0: android.graphics.Rect): android.graphics.Rect { val r = target(r0); return android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom) }
 
     private fun ringDrawable(): android.graphics.drawable.Drawable {
@@ -407,7 +407,7 @@ class MainActivity : Activity() {
                     if (ex > 10) {
                         if (++drift >= 2 && visible) {
                             drift = 0
-                            if (calib < 3) { calib++; val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom; if (Math.abs(dl) < 60 && Math.abs(dt) < 60 && Math.abs(dr) < 60 && Math.abs(db) < 60) { adj.left += dl; adj.top += dt; adj.right += dr; adj.bottom += db } }
+                            if (calib < 3) { calib++; val dl = want.left - b.left; val dt = want.top - b.top; val dr = want.right - b.right; val db = want.bottom - b.bottom; if (Math.abs(dl) < 60 && Math.abs(dt) < 60 && Math.abs(dr) < 60 && Math.abs(db) < 60) { adj.left += dl; adj.top += dt; adj.right += dr; adj.bottom += db; saveAdj() } }
                             val nowMs = SystemClock.elapsedRealtime()
                             if (nowMs - lastRelaunchAt > 2500) { lastRelaunchAt = nowMs; relaunchFloat(pk, adjusted(want0!!)) }
                         }
@@ -429,7 +429,9 @@ class MainActivity : Activity() {
     private fun ev(msg: String) { MixService.events = (listOf(java.text.SimpleDateFormat("h:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + msg) + MixService.events).take(6) }
     override fun onStop() { super.onStop(); hubStarted = false; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
-    private fun loadFloat() { try {
+    private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
+    private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj", "") ?: "").split(","); if (q.size == 4) adj.set(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) } catch (e: Exception) { } }
+    private fun loadFloat() { loadAdj(); try {
         val p = Ops.prefs(this); val pk = p.getString("float_pkg", "") ?: ""; val q = (p.getString("float_rect", "") ?: "").split(",")
         if (pk.isNotEmpty() && q.size == 4) { floatPkg = pk; floatRect = android.graphics.Rect(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) }
     } catch (e: Exception) { } }
@@ -1153,7 +1155,7 @@ class MainActivity : Activity() {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             return try {
                 val o = android.app.ActivityOptions.makeBasic()
-                val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }
+                val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0 }
                 o.setLaunchBounds(adjusted(want))
                 startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { Ops.launchApp(this@MainActivity, pkg) }
@@ -1213,7 +1215,7 @@ class MainActivity : Activity() {
                 val q = Uri.encode(query)
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?q=$q&navigate=yes") else Uri.parse("google.navigation:q=$q&mode=d")
                 val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val o = android.app.ActivityOptions.makeBasic(); val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
+                val o = android.app.ActivityOptions.makeBasic(); val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0 }; o.setLaunchBounds(adjusted(want))
                 startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { false }
         }
@@ -1222,7 +1224,7 @@ class MainActivity : Activity() {
             return try {
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?ll=$lat,$lon&navigate=yes") else Uri.parse("google.navigation:q=$lat,$lon&mode=d")
                 val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val o = android.app.ActivityOptions.makeBasic(); val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0; adj.set(0, 0, 0, 0) }; o.setLaunchBounds(adjusted(want))
+                val o = android.app.ActivityOptions.makeBasic(); val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0 }; o.setLaunchBounds(adjusted(want))
                 startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { false }
         }
