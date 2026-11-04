@@ -479,20 +479,23 @@ class MainActivity : Activity() {
     private var pausedUntil = 0L
     private var lastA11yNote = 0L
     /** Circuit breaker: never put Maps back more than 4 times a minute, and never blindly when the hub cannot see windows. */
-    private fun mayRelaunch(why: String): Boolean {
+    /** [count] false = a small position nudge: it is limited by its own 3-nudge cap per placement, so it must not use up the restore allowance (one normal return = 1 restore + up to 3 nudges used to trip the breaker by itself). */
+    private fun mayRelaunch(why: String, count: Boolean = true): Boolean {
         val now = SystemClock.elapsedRealtime()
         if (now < pausedUntil) return false
         if (MixService.inst == null) {
             if (now - lastA11yNote > 60000) { lastA11yNote = now; ev("Maps placement paused: the Start mix helper (Accessibility) is off, so the hub cannot see the Maps window") }
             return false
         }
+        if (!count) return true
         relaunchTimes.removeAll { now - it > 60000 }
         if (relaunchTimes.size >= 4) { pausedUntil = now + 120000; relaunchTimes.clear(); ev("Maps was put back 4 times in a minute (" + why + "): pausing automatic placement for 2 minutes"); return false }
         relaunchTimes.add(now); return true
     }
+    private var retryQueued = false
     private fun nudgeMaps(pk: String, b: android.graphics.Rect?, want0: android.graphics.Rect) {
         if (Ops.sleeping()) return
-        if (!mayRelaunch("nudge")) return
+        if (!mayRelaunch("nudge", false)) return
         val tg = target(want0)
         if (b != null) {
             val dl = tg.left - b.left; val dt = tg.top - b.top; val dr = tg.right - b.right; val db = tg.bottom - b.bottom
@@ -572,7 +575,10 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         rebindListener()
+        // Hide the bars first, then measure the pane: measuring while the status bar was still showing put the pane ~30 px too low (y 97/100 instead of 68), so Maps was placed wrong and nudged again and again.
+        goImmersive()
         pushJs("window.hubReportPane && window.hubReportPane()")
+        for (d in longArrayOf(350L, 900L)) main.postDelayed({ try { if (hubStarted) pushJs("window.hubReportPane && window.hubReportPane()") } catch (e: Exception) { } }, d)
         restoreWaits = 0
         hubStarted = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 1500)
         val pk = tuckedPkg
@@ -601,7 +607,17 @@ class MainActivity : Activity() {
             return
         }
         restoreWaits = 0
-        if (!mayRelaunch("restore")) { tuckedPkg = ""; return }
+        if (!mayRelaunch("restore")) {
+            // Paused by the breaker: do NOT forget that Maps is tucked away. Try again when the pause ends, so Maps comes back by itself.
+            val wait = pausedUntil - SystemClock.elapsedRealtime()
+            if (wait > 0) {
+                if (!retryQueued) {
+                    retryQueued = true
+                    main.postDelayed({ retryQueued = false; try { if (hubStarted && !sheetOpen && !handingOver() && tuckedPkg.isNotEmpty()) { restoreWaits = 0; restoreMaps() } } catch (e: Exception) { } }, wait + 500)
+                }
+            } else tuckedPkg = ""
+            return
+        }
         tuckedPkg = ""; lastRestoreAt = SystemClock.elapsedRealtime(); nudges = 0; gaveUp = false; lastNudgeFrom = null
         ev("placing Maps on pane [" + adjusted(r).left + "," + adjusted(r).top + "," + adjusted(r).right + "," + adjusted(r).bottom + "]")
         // wait for the page to measure the pane afresh (the saved rectangle can be stale after the hub was closed and reopened)
