@@ -461,9 +461,8 @@ class MainActivity : Activity() {
                                 if (nudges >= 3) {
                                     if (!gaveUp) {
                                         gaveUp = true; adj.set(0, 0, 0, 0)
-                                        // Maps would not get smaller than this: remember it, so next time the pane is asked for exactly that size and no more nudging is needed
-                                        if ((b.width() > want.width() || b.height() > want.height()) && b.width() - want.width() <= 40 && b.height() - want.height() <= 40) { minW = Math.max(minW, b.width()).coerceAtMost(1100); minH = Math.max(minH, b.height()).coerceAtMost(700); saveMin() }
-                                        ev("Maps will not get smaller than [" + b.width() + " x " + b.height() + "], using that size from now on (wanted [" + want.width() + " x " + want.height() + "])")
+                                        // v0.80: no longer "learn" a minimum size from the window bounds. Those include Samsung's window frame, so the learned size grew the window past the pane every time (it covered the weather card and the Like/Dislike row).
+                                        ev("Maps stays at [" + b.width() + " x " + b.height() + "], pane asked for [" + want.width() + " x " + want.height() + "]; not resizing any more")
                                     }
                                 } else nudgeMaps(pk, b, want0!!)
                             }
@@ -525,7 +524,8 @@ class MainActivity : Activity() {
     override fun onStop() { super.onStop(); hubStarted = false; paneRect = null; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
     private fun saveMin() { try { Ops.prefs(this).edit().putString("maps_min", minW.toString() + "," + minH).apply() } catch (e: Exception) { } }
-    private fun loadMin() { try { val q = (Ops.prefs(this).getString("maps_min", "") ?: "").split(","); if (q.size == 2) { minW = q[0].toInt(); minH = q[1].toInt() } } catch (e: Exception) { } }
+    /** v0.80: the old learned "minimum Maps size" was wrong (it included the window frame) and made Maps too big. Forget it for good. */
+    private fun loadMin() { minW = 0; minH = 0; try { if (Ops.prefs(this).contains("maps_min")) Ops.prefs(this).edit().remove("maps_min").apply() } catch (e: Exception) { } }
     private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj3", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
     private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj3", "") ?: "").split(","); if (q.size == 4) { val v = q.map { it.toInt() }; if (v.all { Math.abs(it) <= 15 }) adj.set(v[0], v[1], v[2], v[3]) } } catch (e: Exception) { } }
     private fun loadFloat() { loadAdj(); loadMin(); try {
