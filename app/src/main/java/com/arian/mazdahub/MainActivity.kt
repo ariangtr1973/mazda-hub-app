@@ -369,6 +369,9 @@ class MainActivity : Activity() {
         if (minH > 0 && t.height() < minH) t.bottom = t.top + minH
         return t
     }
+    /** Maps sits inside its pane and is nearly as big as it: good enough, do not keep relaunching it for a few pixels. */
+    private fun fitsPane(b: android.graphics.Rect, t: android.graphics.Rect): Boolean =
+        b.left >= t.left - 8 && b.top >= t.top - 12 && b.right <= t.right + 8 && b.bottom <= t.bottom + 8 && b.width() >= t.width() * 0.8 && b.height() >= t.height() * 0.8
     private fun adjusted(r0: android.graphics.Rect): android.graphics.Rect { val r = target(r0); return android.graphics.Rect(r.left + adj.left, r.top + adj.top, r.right + adj.right, r.bottom + adj.bottom) }
 
     private fun ringDrawable(): android.graphics.drawable.Drawable {
@@ -450,7 +453,7 @@ class MainActivity : Activity() {
                 if (hubStarted && b != null && want != null) {
                     val dtop = Math.abs(b.top - want.top); val ex = Math.abs(b.left - want.left) + (if (dtop <= 40) 0 else dtop) + Math.abs(b.right - want.right) + Math.abs(b.bottom - want.bottom)
                     calLog = "want [" + want.left + "," + want.top + "," + want.right + "," + want.bottom + "] actual [" + b.left + "," + b.top + "," + b.right + "," + b.bottom + "] adj [" + adj.left + "," + adj.top + "," + adj.right + "," + adj.bottom + "]"
-                    if (ex > 10) {
+                    if (ex > 10 && !fitsPane(b, want)) {
                         if (++drift >= 2 && visible && !sheetOpen && tuckedPkg.isEmpty() && !handingOver()) {
                             drift = 0
                             val nowMs = SystemClock.elapsedRealtime()
@@ -614,6 +617,8 @@ class MainActivity : Activity() {
             val want = paneRect ?: floatRect ?: return@postDelayed
             val tg = target(want); val b = MixService.inst?.floatBounds(pk)
             val dtp = if (b == null) 0 else Math.abs(b.top - tg.top)
+            if (b != null && b.width() >= 300 && fitsPane(b, tg)) return@postDelayed
+            if ((b == null || b.width() < 300) && d < 8000L) return@postDelayed   // give Maps time to appear; only the last check relaunches it
             if (b == null || b.width() < 300 || Math.abs(b.left - tg.left) + (if (dtp <= 40) 0 else dtp) + Math.abs(b.right - tg.right) + Math.abs(b.bottom - tg.bottom) > 10) {
                 if (nudges >= 3) return@postDelayed
                 ev("Maps not on its pane, putting it back"); nudgeMaps(pk, if (b != null && b.width() > 300) b else null, want)
