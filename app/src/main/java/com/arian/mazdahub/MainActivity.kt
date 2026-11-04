@@ -660,6 +660,7 @@ class MainActivity : Activity() {
         }, 4000)
     }
 
+    private var wifiPokes = 0
     private fun waitOnline(id: Int, maxMs: Long, then: () -> Unit) {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         var done = false
@@ -686,9 +687,17 @@ class MainActivity : Activity() {
                 if (s % 15L < 5L) Ops.log(this@MainActivity, "Still waiting at " + s + " s: " + state)
                 // Nudge Android to look for the hotspot again (it can sit on an old, failed scan for minutes).
                 if (wifiOn && s % 20L < 5L) { try { @Suppress("DEPRECATION") val ok = (applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager).startScan(); if (s % 40L < 5L) Ops.log(this@MainActivity, "Asked Wi-Fi to scan for the hotspot (" + (if (ok) "started" else "Android declined") + ")") } catch (e: Exception) { } }
+                // What you did by hand: opening Android's Wi-Fi page makes it scan properly and join the saved hotspot. Do that for a few seconds, then come back.
+                if (wifiOn && c2 == null && wifiPokes < 3 && s >= 20 + wifiPokes * 40L && MixService.inst != null) {
+                    wifiPokes++
+                    Ops.log(this@MainActivity, "Wi-Fi is not joining the hotspot yet (" + s + " s): opening Android's Wi-Fi page for 6 s to wake its scan (poke " + wifiPokes + ")")
+                    try { startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) { }
+                    main.postDelayed({ try { MixService.inst?.goBack() } catch (e: Exception) { } }, 6000)
+                }
                 main.postDelayed(this, 5000)
             }
         }
+        wifiPokes = 0
         main.postDelayed(tick, 5000)
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(n: Network, c: NetworkCapabilities) {

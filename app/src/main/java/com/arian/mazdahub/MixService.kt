@@ -91,6 +91,7 @@ class MixService : AccessibilityService() {
     }
 
     /** Same as pressing the Home button: Samsung folds floating pop-up windows into their bubbles. */
+    fun goBack() { performGlobalAction(GLOBAL_ACTION_BACK) }
     fun goHome() { performGlobalAction(GLOBAL_ACTION_HOME) }
 
     /** Same as pressing the power button: the screen goes dark. Used after the car turns off if the screen stays lit. */
