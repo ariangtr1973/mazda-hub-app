@@ -472,8 +472,24 @@ class MainActivity : Activity() {
         }
     }
     /** Ask Maps for the pane again; when it landed somewhere else, learn the constant difference (window frame) and correct for it. */
+    private val relaunchTimes = ArrayList<Long>()
+    private var pausedUntil = 0L
+    private var lastA11yNote = 0L
+    /** Circuit breaker: never put Maps back more than 4 times a minute, and never blindly when the hub cannot see windows. */
+    private fun mayRelaunch(why: String): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        if (now < pausedUntil) return false
+        if (MixService.inst == null) {
+            if (now - lastA11yNote > 60000) { lastA11yNote = now; ev("Maps placement paused: the Start mix helper (Accessibility) is off, so the hub cannot see the Maps window") }
+            return false
+        }
+        relaunchTimes.removeAll { now - it > 60000 }
+        if (relaunchTimes.size >= 4) { pausedUntil = now + 120000; relaunchTimes.clear(); ev("Maps was put back 4 times in a minute (" + why + "): pausing automatic placement for 2 minutes"); return false }
+        relaunchTimes.add(now); return true
+    }
     private fun nudgeMaps(pk: String, b: android.graphics.Rect?, want0: android.graphics.Rect) {
         if (Ops.sleeping()) return
+        if (!mayRelaunch("nudge")) return
         val tg = target(want0)
         if (b != null) {
             val dl = tg.left - b.left; val dt = tg.top - b.top; val dr = tg.right - b.right; val db = tg.bottom - b.bottom
@@ -525,7 +541,7 @@ class MainActivity : Activity() {
             folding = true
             floatPkg = np
             lastOutLaunch = SystemClock.elapsedRealtime()
-            MixService.inst?.goHome(); ev("Folded Maps, then opening an app")
+            if (isDefaultHome()) MixService.inst?.goHome() else MixService.inst?.minimizeFloating(np); ev("Folded Maps, then opening an app" + (if (isDefaultHome()) "" else " (hub is not the home app: used the minimize button)"))
             main.postDelayed({
                 folding = false
                 try { super@MainActivity.startActivity(i, options) } catch (e: Exception) { }
@@ -536,6 +552,12 @@ class MainActivity : Activity() {
         }
         super.startActivity(i, options)
     }
+
+    /** The Home-button trick only works when this hub IS the home app; otherwise Home would leave the hub for the other launcher. */
+    private fun isDefaultHome(): Boolean = try {
+        val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        packageManager.resolveActivity(i, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
+    } catch (e: Exception) { false }
 
     private fun mapsOnTop(): Boolean = try { floatPkg.isNotEmpty() && (MixService.inst?.floatBounds(floatPkg)?.let { it.width() > 300 && it.height() > 150 } == true) } catch (e: Exception) { false }
 
@@ -576,6 +598,7 @@ class MainActivity : Activity() {
             return
         }
         restoreWaits = 0
+        if (!mayRelaunch("restore")) { tuckedPkg = ""; return }
         tuckedPkg = ""; lastRestoreAt = SystemClock.elapsedRealtime(); nudges = 0; gaveUp = false; lastNudgeFrom = null
         ev("placing Maps on pane [" + adjusted(r).left + "," + adjusted(r).top + "," + adjusted(r).right + "," + adjusted(r).bottom + "]")
         // wait for the page to measure the pane afresh (the saved rectangle can be stale after the hub was closed and reopened)
@@ -1313,7 +1336,7 @@ class MainActivity : Activity() {
                 if (np.isNotEmpty()) {
                     floatPkg = np; tuckedPkg = np
                     ignoreHomeUntil = SystemClock.elapsedRealtime() + 3000
-                    MixService.inst?.goHome(); ev("Folded Maps for a hub screen (same as Home)")
+                    if (isDefaultHome()) MixService.inst?.goHome() else MixService.inst?.minimizeFloating(np); ev("Folded Maps for a hub screen" + (if (isDefaultHome()) " (same as Home)" else " (hub is not the home app: used the minimize button)"))
                     // if it is still showing a moment later, use the slower way
                     main.postDelayed({ if (sheetOpen && floatingNavPkg().isNotEmpty()) { ev("Maps still showing over the hub screen, folding it again"); MixService.inst?.minimizeFloating(np) } }, 1800)
                 }
