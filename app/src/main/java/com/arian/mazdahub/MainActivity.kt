@@ -333,7 +333,7 @@ class MainActivity : Activity() {
                         else -> if (svc.resume(usedPkg)) "resume" else "no player yet"
                     }
                 }
-                if (n % 8 == 0) Ops.log(this, "Try " + n + ": " + how)
+                if (n % 8 == 0) Ops.log(this, "Try " + n + ": " + how + " | player: " + (NowPlayingService.inst?.stateInfo(usedPkg) ?: "no listener"))
                 main.postDelayed({ attempt(n + 1) }, 1200)
             }
             main.postDelayed({ attempt(0) }, delay)

@@ -215,6 +215,16 @@ class NowPlayingService : NotificationListenerService() {
         }
     }
 
+    /** What the music app's player says right now (state, error text, position) for the start-up log. */
+    fun stateInfo(pkg: String): String {
+        return try {
+            val c = (msm?.getActiveSessions(cn) ?: all).firstOrNull { it.packageName == pkg } ?: return "no player"
+            val st = c.playbackState ?: return "no state"
+            val name = when (st.state) { PlaybackState.STATE_PLAYING -> "playing"; PlaybackState.STATE_PAUSED -> "paused"; PlaybackState.STATE_BUFFERING -> "buffering"; PlaybackState.STATE_ERROR -> "ERROR"; PlaybackState.STATE_STOPPED -> "stopped"; PlaybackState.STATE_NONE -> "none"; else -> "state " + st.state }
+            name + " at " + (st.position / 1000) + " s" + (if (st.errorMessage != null) ", error: " + st.errorMessage else "")
+        } catch (e: Exception) { "unknown" }
+    }
+
     private fun push() {
         val c = current
         val o = JSONObject()
