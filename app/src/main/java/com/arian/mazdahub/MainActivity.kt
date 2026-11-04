@@ -446,7 +446,7 @@ class MainActivity : Activity() {
     private val lockTick = object : Runnable {
         override fun run() {
             try {
-                val pk = floatPkg; val want0 = paneRect ?: floatRect; val want = if (want0 != null) target(want0) else null
+                val pk = floatPkg; val want0 = paneRect; val want = if (want0 != null) target(want0) else null
                 val b0 = if (pk.isNotEmpty()) MixService.inst?.floatBounds(pk) else null
                 val b = if (b0 != null && want != null && b0.width() > want.width() * 0.6 && b0.height() > want.height() * 0.6) b0 else null
                 updateRing(b)
@@ -524,7 +524,7 @@ class MainActivity : Activity() {
     private fun saveMin() { try { Ops.prefs(this).edit().putString("maps_min", minW.toString() + "," + minH).apply() } catch (e: Exception) { } }
     private fun loadMin() { try { val q = (Ops.prefs(this).getString("maps_min", "") ?: "").split(","); if (q.size == 2) { minW = q[0].toInt(); minH = q[1].toInt() } } catch (e: Exception) { } }
     private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj3", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
-    private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj3", "") ?: "").split(","); if (q.size == 4) adj.set(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) } catch (e: Exception) { } }
+    private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj3", "") ?: "").split(","); if (q.size == 4) { val v = q.map { it.toInt() }; if (v.all { Math.abs(it) <= 15 }) adj.set(v[0], v[1], v[2], v[3]) } } catch (e: Exception) { } }
     private fun loadFloat() { loadAdj(); loadMin(); try {
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
         if (Ops.prefs(this).getString("log_ver", "") != ver) { Ops.prefs(this).edit().remove("autolog").putString("log_ver", ver).apply(); MixService.events = emptyList() }
@@ -575,10 +575,10 @@ class MainActivity : Activity() {
         pushJs("window.hubReportPane && window.hubReportPane()")
         restoreWaits = 0
         hubStarted = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 1500)
-        val pk = tuckedPkg; val r = paneRect ?: floatRect
+        val pk = tuckedPkg
         val justLaunched = SystemClock.elapsedRealtime() - lastOutLaunch < 5000
         ev("hub back in view" + (if (pk.isNotEmpty()) (if (justLaunched) ", skipped Maps (app just opened)" else ", bringing Maps back") else ""))
-        if (pk.isNotEmpty() && r != null && !justLaunched && !sheetOpen) restoreMaps()
+        if (pk.isNotEmpty() && !justLaunched && !sheetOpen) restoreMaps()
     }
 
     /** The hub is on screen and in front (Home, or back from Recents) but Maps is not on its pane: bring it back. */
@@ -593,7 +593,7 @@ class MainActivity : Activity() {
 
     /** Puts the Maps window back on the map pane (the pane's current position, measured live). */
     private fun restoreMaps() {
-        val pk = tuckedPkg; val r = paneRect ?: floatRect
+        val pk = tuckedPkg; val r = paneRect
         if (pk.isEmpty() || Ops.sleeping()) return
         if (r == null) {
             // The page has not told us where the pane is yet (it re-measures after every return). Try again shortly instead of waiting for a Home press.
@@ -608,13 +608,13 @@ class MainActivity : Activity() {
         main.postDelayed({ try {
             if (Ops.sleeping()) return@postDelayed
             val i = packageManager.getLaunchIntentForPackage(pk)
-            val rr = paneRect ?: floatRect ?: r
+            val rr = paneRect ?: r
             if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(adjusted(rr)); startActivity(i, o.toBundle()) }
         } catch (e: Exception) { } }, if (paneRect == null) 1500L else 500L)
         // Make sure it really landed on the pane: check a few times and put it back if it is off
         for (d in longArrayOf(2200, 3800, 5600, 8000)) main.postDelayed({ try {
             if (!hubStarted || sheetOpen || tuckedPkg.isNotEmpty() || handingOver()) return@postDelayed
-            val want = paneRect ?: floatRect ?: return@postDelayed
+            val want = paneRect ?: return@postDelayed
             val tg = target(want); val b = MixService.inst?.floatBounds(pk)
             val dtp = if (b == null) 0 else Math.abs(b.top - tg.top)
             if (b != null && b.width() >= 300 && fitsPane(b, tg)) return@postDelayed
