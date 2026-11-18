@@ -184,6 +184,7 @@ class MixService : AccessibilityService() {
     }
     private fun shufDone(ok: Boolean, msg: String) {
         shufOn = false; status = msg
+        Ops.log(this, "Shuffle Liked music: " + msg)
         MainActivity.live?.pushJs("hub.shuffleDone&&hub.shuffleDone(" + ok + "," + org.json.JSONObject.quote(msg) + ")")
         h.postDelayed({
             try { startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)) } catch (e: Exception) { }

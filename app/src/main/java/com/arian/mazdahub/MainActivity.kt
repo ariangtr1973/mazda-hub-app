@@ -49,7 +49,10 @@ class MainActivity : Activity() {
 
     private val assetHost = "appassets.androidplatform.net"
     private val main = Handler(Looper.getMainLooper())
-    private var runId = 0
+    // v0.82b: shared by every copy of the hub screen, so a recreated hub cancels the old copy's start-up instead of running a second one beside it
+    private var runId: Int
+        get() = runIdShared
+        set(v) { runIdShared = v }
     private var netCb: ConnectivityManager.NetworkCallback? = null
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -137,13 +140,14 @@ class MainActivity : Activity() {
             web.restoreState(savedInstanceState)
         }
         live = this
-        if (intent?.getBooleanExtra("auto", false) == true) autoStart()
+        // v0.82b: only a fresh launch starts the car start-up; a hub that Android rebuilt keeps the old launch's "auto" flag and used to start a second run
+        if (savedInstanceState == null && intent?.getBooleanExtra("auto", false) == true) { intent?.removeExtra("auto"); autoStart() }
     }
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent?.getBooleanExtra("auto", false) == true) autoStart()
+        if (intent?.getBooleanExtra("auto", false) == true) { intent.removeExtra("auto"); autoStart() }
         // Home button = same as the X: close any hub screen that is open and put Maps back on its pane
         else if (intent?.hasCategory(Intent.CATEGORY_HOME) == true && SystemClock.elapsedRealtime() > ignoreHomeUntil) {
             ev("Home pressed")
@@ -256,7 +260,11 @@ class MainActivity : Activity() {
     private fun js(code: String) { runOnUiThread { web.evaluateJavascript(code, null) } }
     private fun say(msg: String) { js("window.hub&&hub.autoStatus&&hub.autoStatus(" + JSONObject.quote(msg) + ")") }
 
-    fun autoStart() {
+    fun autoStart(force: Boolean = false) {
+        // v0.82b: the car can send its "connected" signal twice; ignore a second start within 90 s instead of running two start-ups
+        val nowA = SystemClock.elapsedRealtime()
+        if (!force && nowA - autoStartedAt < 90_000) { Ops.log(this, "Car start-up already running (" + ((nowA - autoStartedAt) / 1000) + " s ago), ignoring the second signal"); return }
+        autoStartedAt = nowA
         Ops.cancelSleep(this)
         autoStop(quiet = true)
         val id = ++runId
@@ -461,7 +469,7 @@ class MainActivity : Activity() {
                                         gaveUp = true; adj.set(0, 0, 0, 0)
                                         // Maps would not get smaller than this: remember it, so next time the pane is asked for exactly that size and no more nudging is needed
                                         // v0.82: learn only the height (Maps really will not go shorter); a learned width pushed Maps over the right column
-                                        if (b.height() > want.height() && b.height() - want.height() <= 40) { minW = 0; minH = Math.max(minH, b.height()).coerceAtMost(700); saveMin() }
+                                        minW = 0; minH = 0   // v0.82b: no learned sizes at all; Maps proved it fits the pane
                                         ev("Maps will not get smaller than [" + b.width() + " x " + b.height() + "], using that size from now on (wanted [" + want.width() + " x " + want.height() + "])")
                                     }
                                 } else nudgeMaps(pk, b, want0!!)
@@ -524,7 +532,7 @@ class MainActivity : Activity() {
     override fun onStop() { super.onStop(); hubStarted = false; paneRect = null; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
     private fun saveMin() { try { Ops.prefs(this).edit().putString("maps_min", minW.toString() + "," + minH).apply() } catch (e: Exception) { } }
-    private fun loadMin() { try { val q = (Ops.prefs(this).getString("maps_min", "") ?: "").split(","); if (q.size == 2) { minW = 0; minH = q[1].toInt().coerceIn(0, 700) } } catch (e: Exception) { } }
+    private fun loadMin() { try { val q = (Ops.prefs(this).getString("maps_min", "") ?: "").split(","); if (q.size == 2) { minW = 0; minH = 0 } } catch (e: Exception) { } }
     private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj3", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
     private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj3", "") ?: "").split(","); if (q.size == 4) { val v = q.map { it.toInt() }; if (v.all { Math.abs(it) <= 15 }) adj.set(v[0], v[1], v[2], v[3]) } } catch (e: Exception) { } }
     private fun loadFloat() { loadAdj(); loadMin(); try {
@@ -738,6 +746,7 @@ class MainActivity : Activity() {
         main.removeCallbacksAndMessages(null)
         clearNet()
         if (!quiet) {
+            autoStartedAt = -1_000_000L   // car turned off: the next car start is a real new one
             runOnUiThread { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             js("window.hub&&hub.setAwake&&hub.setAwake(false)")
             say("Car disconnected")
@@ -1612,7 +1621,7 @@ class MainActivity : Activity() {
 
         @JavascriptInterface fun setDelay(sec: Int) { Ops.prefs(this@MainActivity).edit().putInt("delay_s", sec.coerceIn(3, 30)).apply() }
 
-        @JavascriptInterface fun testAuto() { runOnUiThread { autoStart() } }
+        @JavascriptInterface fun testAuto() { runOnUiThread { autoStart(true) } }
     }
 
     companion object {
@@ -1625,5 +1634,7 @@ class MainActivity : Activity() {
         private const val REQ_BACKUP = 1007
         private const val REQ_RESTORE = 1008
         @Volatile var live: MainActivity? = null
+        @Volatile var runIdShared = 0
+        @Volatile var autoStartedAt = -1_000_000L
     }
 }
