@@ -278,11 +278,43 @@ class MainActivity : Activity() {
             val cm0 = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             val up = cm0.getNetworkCapabilities(cm0.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
             val w0 = (Ops.prefs(this).getString("music_pkg", "") ?: "").let { if (Ops.ignorable(it)) "" else it }
-            if (!up && w0.isNotEmpty() && Ops.launchApp(this, w0)) Ops.log(this, "Hotspot not up yet: opened the music app early so it is ready")
+            // v0.84: no longer opens the music app on top of the hub here (that window switch cost time and folded Maps)
+            if (!up && w0.isNotEmpty()) Ops.log(this, "Hotspot not up yet: the music app will be started in the background once it is up")
         } catch (e: Exception) { }
         waitOnline(id, 180_000) {
             if (id != runId) return@waitOnline
             say("Starting music\u2026")
+            val want0 = (Ops.prefs(this).getString("music_pkg", "") ?: "").let { if (Ops.ignorable(it)) "" else it }
+            if (want0.isEmpty()) { openAndPlay(id); return@waitOnline }
+            // v0.84: start the music without leaving the hub (the way a Bluetooth headset's Play button does). Only if that stays silent is the app opened.
+            Ops.log(this, "Starting " + want0 + " in the background (the hub stays in front)")
+            val t0 = SystemClock.elapsedRealtime()
+            var busySince = 0L
+            fun bg(n: Int) {
+                if (id != runId) return
+                val now = SystemClock.elapsedRealtime(); val secs = (now - t0) / 1000
+                if (Ops.musicActive(this)) { Ops.log(this, "Music is playing (" + secs + " s, in the background, no window switch)"); say("Playing"); return }
+                val svc = NowPlayingService.inst
+                val busy = svc?.busy(want0) == true
+                if (busy) { if (busySince == 0L) busySince = now } else busySince = 0L
+                if (busy && now - busySince < 12_000) { main.postDelayed({ bg(n + 1) }, 1000); return }
+                if (secs >= 16) { Ops.log(this, "Background start stayed silent for " + secs + " s (player: " + (svc?.stateInfo(want0) ?: "no listener") + "), opening the app"); openAndPlay(id); return }
+                val how = when (n) {
+                    0, 6 -> if (svc != null && svc.resume(want0)) "resume where it left off" else { Ops.mediaKeyTo(this, want0, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "sent Play to the app" }
+                    11 -> if (svc != null && svc.playSaved(want0)) "play last track by name" else { Ops.mediaKeyTo(this, want0, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "sent Play again" }
+                    else -> ""
+                }
+                if (how.isNotEmpty()) Ops.log(this, "Background (" + secs + " s): " + how + " | player: " + (svc?.stateInfo(want0) ?: "no listener"))
+                main.postDelayed({ bg(n + 1) }, 1000)
+            }
+            bg(0)
+        }
+    }
+
+    /** Fallback: open the music app on screen and press play there (what every version before v0.84 always did). */
+    private fun openAndPlay(id: Int) {
+        run {
+            if (id != runId) return
             Ops.log(this, "Opening your music app")
             val prefs = Ops.prefs(this)
             val want = (prefs.getString("music_pkg", "") ?: "").let { if (Ops.ignorable(it)) "" else it }
@@ -294,7 +326,7 @@ class MainActivity : Activity() {
                     say("Your chosen app would not open. Using another music app.")
                 }
             }
-            if (used == null) { Ops.log(this, "No music app could be opened"); say("No music app found. Pick one in the music picker."); return@waitOnline }
+            if (used == null) { Ops.log(this, "No music app could be opened"); say("No music app found. Pick one in the music picker."); return }
             Ops.log(this, "Opened " + used + ", starting music in 1 s")
             val delay = 1000L
             // Keep trying for ~60 s: a freshly opened music app needs a while before it has a player to press play on.
@@ -711,7 +743,7 @@ class MainActivity : Activity() {
                 // Nudge Android to look for the hotspot again (it can sit on an old, failed scan for minutes).
                 if (wifiOn && s % 20L < 5L) { try { @Suppress("DEPRECATION") val ok = (applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager).startScan(); if (s % 40L < 5L) Ops.log(this@MainActivity, "Asked Wi-Fi to scan for the hotspot (" + (if (ok) "started" else "Android declined") + ")") } catch (e: Exception) { } }
                 // What you did by hand: opening Android's Wi-Fi page makes it scan properly and join the saved hotspot. Do that for a few seconds, then come back.
-                if (wifiOn && c2 == null && wifiPokes < 3 && s >= 20 + wifiPokes * 40L && MixService.inst != null) {
+                if (false && wifiOn && c2 == null && wifiPokes < 3 && s >= 20 + wifiPokes * 40L && MixService.inst != null) {   // v0.84: off, it switched windows
                     wifiPokes++
                     Ops.log(this@MainActivity, "Wi-Fi is not joining the hotspot yet (" + s + " s): opening Android's Wi-Fi page for 6 s to wake its scan (poke " + wifiPokes + ")")
                     try { startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) { }
