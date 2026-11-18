@@ -620,6 +620,7 @@ class MainActivity : Activity() {
         for (d in longArrayOf(350L, 900L)) main.postDelayed({ try { if (hubStarted) pushJs("window.hubReportPane && window.hubReportPane()") } catch (e: Exception) { } }, d)
         restoreWaits = 0
         hubStarted = true; lockHandler.removeCallbacks(lockTick); lockHandler.postDelayed(lockTick, 1500)
+        if (MixService.inst == null) ev(if (helperSwitchedOn()) "helper is switched on in Accessibility but Android has not connected it" else "helper is switched OFF in Accessibility")
         val pk = tuckedPkg
         val justLaunched = SystemClock.elapsedRealtime() - lastOutLaunch < 5000
         ev("hub back in view" + (if (pk.isNotEmpty()) (if (justLaunched) ", skipped Maps (app just opened)" else ", bringing Maps back") else ""))

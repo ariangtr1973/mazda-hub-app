@@ -21,8 +21,10 @@ class MixService : AccessibilityService() {
     private var menuAt = 0L
     private var menuTry = 0
 
-    override fun onServiceConnected() { inst = this }
-    override fun onUnbind(intent: Intent?): Boolean { if (inst === this) inst = null; return super.onUnbind(intent) }
+    // v0.85: write every connect / disconnect of this helper to the hub log, to find out why it keeps going off
+    override fun onServiceConnected() { inst = this; Ops.log(this, "[helper] connected by Android") }
+    override fun onUnbind(intent: Intent?): Boolean { if (inst === this) inst = null; Ops.log(this, "[helper] disconnected by Android"); return super.onUnbind(intent) }
+    override fun onDestroy() { if (inst === this) inst = null; Ops.log(this, "[helper] stopped"); super.onDestroy() }
     override fun onInterrupt() { }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) { }
 
@@ -192,7 +194,13 @@ class MixService : AccessibilityService() {
     }
     private fun shufTick() {
         if (!shufOn) return
-        if (SystemClock.elapsedRealtime() > shufDeadline) { shufDone(false, "Liked music opened, but its Shuffle button was not found. Tap Shuffle there."); return }
+        if (SystemClock.elapsedRealtime() > shufDeadline) {
+            // v0.85: record what was on the screen, so the right button can be matched next time
+            val seen = ArrayList<String>()
+            try { for (w in windows ?: emptyList()) { val r = w.root ?: continue; if (r.packageName?.toString() == pkg) walk(r) { n -> val t = label(n); if (t.isNotEmpty() && seen.size < 30) seen.add(t.take(28)) } } } catch (e: Exception) { }
+            Ops.log(this, "Shuffle Liked music: " + status + ". Saw: " + (if (seen.isEmpty()) "no " + pkg + " window" else seen.joinToString(" / ")))
+            shufDone(false, "Liked music opened, but its Shuffle button was not found. Tap Shuffle there."); return
+        }
         try {
             val roots = ArrayList<AccessibilityNodeInfo>()
             for (w in windows ?: emptyList()) { val r = w.root ?: continue; if (r.packageName?.toString() == pkg) roots.add(r) }
