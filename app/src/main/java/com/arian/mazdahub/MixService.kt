@@ -217,18 +217,18 @@ class MixService : AccessibilityService() {
                 val parts = label(n).lowercase().split('|').map { it.trim() }
                 val vid = (n.viewIdResourceName ?: "").lowercase()
                 if (parts.any { it.startsWith("liked music") || it.startsWith("your likes") }) onLiked = true
-                if (shuf == null && (parts.any { it == "shuffle" || it == "shuffle play" || it == "shuffle all" || it == "shuffle playlist" } || (vid.contains("shuffle") && !vid.contains("toggle")))) shuf = n
+                if (shuf == null && parts.any { it == "shuffle play" || it == "shuffle all" || it == "shuffle playlist" || (it == "shuffle" && shufMenuAt > 0L) }) shuf = n
                 if (play == null && parts.any { it == "play" || it == "play all" }) play = n
                 if (parts.any { it == "more options" || it == "more actions" || it == "action menu" || it == "menu" || it == "more" }) { val rb = Rect(); n.getBoundsInScreen(rb); if (rb.width() > 0) menus.add(n) }
             }
             val s = shuf; val p = play
-            if (s != null && (onLiked || shufMenuAt > 0L) && clickUp(s)) { shufDone(true, "Shuffling Liked music"); return }
+            if (s != null && (onLiked || shufMenuAt > 0L) && clickUp(s)) { shufDone(true, "Shuffling Liked music (tapped \"" + label(s).take(30) + "\"" + (if (shufMenuAt > 0L) " in the playlist menu" else "") + ")"); return }
             // v0.87: "Shuffle play" lives in the playlist's three-dot menu, next to the Play button. Open that menu (not a song's menu).
             if (onLiked && shufMenuTries < 3 && now - shufMenuAt > 2500 && menus.isNotEmpty()) {
                 val pb = Rect(); p0(play)?.getBoundsInScreen(pb)
                 val pick = if (play != null) menus.minByOrNull { val q = Rect(); it.getBoundsInScreen(q); Math.abs(q.centerY() - pb.centerY()) }
                            else menus.minByOrNull { val q = Rect(); it.getBoundsInScreen(q); q.top }
-                if (pick != null && clickUp(pick)) { shufMenuTries++; shufMenuAt = now; status = "opened the playlist menu, looking for Shuffle play"; h.postDelayed({ shufTick() }, 900); return }
+                if (pick != null && clickUp(pick)) { shufMenuTries++; shufMenuAt = now; status = "opened the playlist menu, looking for Shuffle play"; Ops.log(this, "Shuffle Liked music: opened the three-dot menu (\"" + label(pick).take(24) + "\", try " + shufMenuTries + ")"); h.postDelayed({ shufTick() }, 900); return }
             }
             // v0.86: Morphe's Liked Music page has Play but no Shuffle button: tap Play, then turn shuffle on in the player
             if (onLiked && p != null && (shufMenuTries >= 3 || (menus.isEmpty() && now > shufDeadline - 12_000)) && clickUp(p)) {

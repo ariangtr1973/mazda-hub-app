@@ -647,7 +647,8 @@ class MainActivity : Activity() {
             return
         }
         restoreWaits = 0
-        if (!mayRelaunch("restore")) {
+        if (SystemClock.elapsedRealtime() - lastRestoreAt < 3000) return   // v0.88: just placed it
+        if (!mayRelaunch("restore", false)) {
             // Paused by the breaker: do NOT forget that Maps is tucked away. Try again when the pause ends, so Maps comes back by itself.
             val wait = pausedUntil - SystemClock.elapsedRealtime()
             if (wait > 0) {
@@ -1404,7 +1405,7 @@ class MainActivity : Activity() {
                     val loc = IntArray(2); web.getLocationOnScreen(loc)
                     val nr = android.graphics.Rect(l + loc[0], t + loc[1], r + loc[0], b + loc[1])
                     paneRect = nr
-                    if (tuckedPkg.isNotEmpty() && hubStarted && !sheetOpen && !handingOver() && SystemClock.elapsedRealtime() - lastOutLaunch >= 5000) {
+                    if (tuckedPkg.isNotEmpty() && hubStarted && !sheetOpen && !handingOver() && !retryQueued && SystemClock.elapsedRealtime() >= pausedUntil && SystemClock.elapsedRealtime() - lastRestoreAt >= 3000 && SystemClock.elapsedRealtime() - lastOutLaunch >= 5000) {
                         ev("pane measured, bringing Maps back"); restoreMaps()
                     }
                     if (floatPkg.isNotEmpty()) {
