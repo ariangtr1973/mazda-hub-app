@@ -547,6 +547,7 @@ class MainActivity : Activity() {
         relaunchFloat(pk, adjusted(want0), false)   // v0.82: move Maps without restarting it (restarting it again and again overloaded the tablet)
     }
     private fun relaunchFloat(pk: String, r: android.graphics.Rect, fresh: Boolean = false) {
+        if (!hubStarted || !hasWindowFocus() || sheetOpen || handingOver()) return   // v0.89: never put Maps over another app
         ev("nudging Maps to [" + r.left + "," + r.top + "," + r.right + "," + r.bottom + "], it was at " + (MixService.inst?.floatBounds(pk)?.let { "[" + it.left + "," + it.top + "," + it.right + "," + it.bottom + "]" } ?: "not showing"))
         val i = packageManager.getLaunchIntentForPackage(pk) ?: return
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); if (fresh) i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -587,12 +588,19 @@ class MainActivity : Activity() {
             floatPkg = np
             lastOutLaunch = SystemClock.elapsedRealtime()
             if (isDefaultHome()) MixService.inst?.goHome() else MixService.inst?.minimizeFloating(np); ev("Folded Maps, then opening an app" + (if (isDefaultHome()) "" else " (hub is not the home app: used the minimize button)"))
-            main.postDelayed({
+            // v0.89: open the app only once Maps is really out of the way (it used to open after a fixed 0.7 s, and Maps could still be floating over it)
+            tuckedPkg = np
+            fun openWhenClear(n: Int) {
+                val still = floatingNavPkg().isNotEmpty()
+                if (still && n == 8) { ev("Maps still showing, folding it with its minimize button before opening the app"); MixService.inst?.minimizeFloating(np) }
+                if (still && n < 20) { main.postDelayed({ openWhenClear(n + 1) }, 150); return }
                 folding = false
+                if (still) ev("Maps did not fold in 3 s, opening the app anyway")
+                lastOutLaunch = SystemClock.elapsedRealtime()
                 try { super@MainActivity.startActivity(i, options) } catch (e: Exception) { }
-                // If Maps is still showing after that, fold it the slower way (find its minimize button).
-                main.postDelayed({ if (floatingNavPkg().isNotEmpty()) { ev("Maps still showing, folding it again"); tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }, 2200)
-            }, 700)
+                main.postDelayed({ if (floatingNavPkg().isNotEmpty()) { ev("Maps still showing over the app, folding it again"); MixService.inst?.minimizeFloating(np) } }, 1500)
+            }
+            main.postDelayed({ openWhenClear(0) }, 250)
             return
         }
         super.startActivity(i, options)
@@ -664,6 +672,7 @@ class MainActivity : Activity() {
         // wait for the page to measure the pane afresh (the saved rectangle can be stale after the hub was closed and reopened)
         main.postDelayed({ try {
             if (Ops.sleeping()) return@postDelayed
+            if (!hubStarted || !hasWindowFocus() || sheetOpen || handingOver()) { ev("skipped placing Maps: another app or screen is in front"); tuckedPkg = pk; return@postDelayed }   // v0.89
             val i = packageManager.getLaunchIntentForPackage(pk)
             val rr = paneRect ?: r
             if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); val o = android.app.ActivityOptions.makeBasic(); o.setLaunchBounds(adjusted(rr)); startActivity(i, o.toBundle()) }
