@@ -171,6 +171,44 @@ class MixService : AccessibilityService() {
         return tapped
     }
 
+    // ---- v0.82: "Shuffle Liked music" button ----
+    private var shufOn = false
+    private var shufDeadline = 0L
+    /** The hub has opened the Liked music playlist in [target]: find its Shuffle button and tap it, then go back to the hub. */
+    fun shuffleLiked(target: String) {
+        phase = 0                       // stop a Start mix that may still be looking for its menu
+        pkg = target; shufOn = true
+        shufDeadline = SystemClock.elapsedRealtime() + 16_000
+        status = "opening Liked music in $target"
+        h.postDelayed({ shufTick() }, 1500)
+    }
+    private fun shufDone(ok: Boolean, msg: String) {
+        shufOn = false; status = msg
+        MainActivity.live?.pushJs("hub.shuffleDone&&hub.shuffleDone(" + ok + "," + org.json.JSONObject.quote(msg) + ")")
+        h.postDelayed({
+            try { startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)) } catch (e: Exception) { }
+        }, if (ok) 1500 else 400)
+    }
+    private fun shufTick() {
+        if (!shufOn) return
+        if (SystemClock.elapsedRealtime() > shufDeadline) { shufDone(false, "Liked music opened, but its Shuffle button was not found. Tap Shuffle there."); return }
+        try {
+            val roots = ArrayList<AccessibilityNodeInfo>()
+            for (w in windows ?: emptyList()) { val r = w.root ?: continue; if (r.packageName?.toString() == pkg) roots.add(r) }
+            var onLiked = false
+            var shuf: AccessibilityNodeInfo? = null
+            for (r in roots) walk(r) { n ->
+                val parts = label(n).lowercase().split('|').map { it.trim() }
+                if (parts.any { it.startsWith("liked music") || it.startsWith("your likes") }) onLiked = true
+                if (shuf == null && parts.any { it == "shuffle" || it == "shuffle play" || it == "shuffle all" || it == "shuffle playlist" }) shuf = n
+            }
+            val s = shuf
+            if (onLiked && s != null && clickUp(s)) { shufDone(true, "Shuffling Liked music"); return }
+            status = if (roots.isEmpty()) "waiting for $pkg to come forward" else if (!onLiked) "waiting for the Liked music page" else "looking for the Shuffle button"
+        } catch (e: Exception) { }
+        h.postDelayed({ shufTick() }, 600)
+    }
+
     private fun walk(n: AccessibilityNodeInfo?, f: (AccessibilityNodeInfo) -> Unit) {
         if (n == null) return
         f(n)

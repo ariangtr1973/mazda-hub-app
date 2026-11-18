@@ -292,49 +292,43 @@ class MainActivity : Activity() {
             // Keep trying for ~60 s: a freshly opened music app needs a while before it has a player to press play on.
             val usedPkg: String = used
             val startedAt = SystemClock.elapsedRealtime()
-            var lastTapAt = 0L      // when a button in the music app was last tapped (never tap twice in a row: the second tap would pause it again)
+            // v0.82: one calm sequence instead of a different command every 1.2 s (on this slow tablet they cancelled each other out,
+            // and the early voice search could start a different song). Each step gets 5 s to work before the next one.
             var busySince = 0L      // when the app began loading / playing without sound yet
+            var lastActAt = 0L
+            var step = 0
             fun attempt(n: Int) {
                 if (id != runId) return
-                val secs = (SystemClock.elapsedRealtime() - startedAt) / 1000
+                val now = SystemClock.elapsedRealtime()
+                val secs = (now - startedAt) / 1000
                 if (Ops.musicActive(this)) {
-                    bringHubToFront(id); Ops.log(this, "Music is playing (try " + n + ", " + secs + " s after opening). Back to the hub"); say("Playing"); return
+                    bringHubToFront(id); Ops.log(this, "Music is playing (" + secs + " s after opening, step " + step + "). Back to the hub"); say("Playing"); return
                 }
-                if (n >= 50) {
-                    bringHubToFront(id); Ops.log(this, "Music still silent after 50 tries. Players: " + (NowPlayingService.inst?.sessionsInfo() ?: "no listener") + ". Back to the hub"); say("Music app opened. Press play if it is quiet."); return
+                if (secs >= 75) {
+                    bringHubToFront(id); Ops.log(this, "Music still silent after 75 s. Players: " + (NowPlayingService.inst?.sessionsInfo() ?: "no listener") + ". Back to the hub"); say("Music app opened. Press play if it is quiet."); return
                 }
                 val svc = NowPlayingService.inst
-                val now = SystemClock.elapsedRealtime()
-                var how: String
-                if (svc == null) { Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); how = "no listener, media key" }
-                else {
-                    if (n % 6 == 0) Ops.log(this, "Try " + n + " (" + secs + " s): players: " + svc.sessionsInfo())
-                    // The app is already loading or starting the song: give it time instead of pressing more buttons (a second tap would pause it).
-                    val busy = svc.busy(usedPkg)
-                    if (busy) { if (busySince == 0L) busySince = now } else busySince = 0L
-                    if (busy && now - busySince < 10_000) {
-                        if (n % 4 == 0) Ops.log(this, "Try " + n + ": app is starting the music, waiting")
-                        main.postDelayed({ attempt(n + 1) }, 1200); return
-                    }
-                    // (The player-service wake-up was removed: Morphe refuses that connection.)
-                    if (n == 1) { Ops.log(this, "Try " + n + ": asked the app to play music (voice-search request): " + Ops.playFromSearch(this, usedPkg)) }
-                    how = when {
-                        n == 0 -> if (svc.resume(usedPkg)) "resume" else "no player yet"
-                        n == 3 || n == 5 -> if (svc.playSaved(usedPkg)) "play last track by name" else "no player yet"
-                        n % 2 == 0 -> {
-                            if (now - lastTapAt < 7000) "tap skipped (just tapped)"
-                            else {
-                                val t = MixService.inst?.tapPlay(usedPkg) ?: ""
-                                if (t.isNotEmpty()) lastTapAt = now
-                                if (t.isNotEmpty() || n % 8 == 0) Ops.log(this, "Try " + n + ": tapped " + (if (t.isEmpty()) "nothing" else t))
-                                "tap"
-                            }
-                        }
-                        else -> if (svc.resume(usedPkg)) "resume" else "no player yet"
-                    }
+                // The app is already loading or starting the song: leave it alone (pressing again would pause it).
+                val busy = svc?.busy(usedPkg) == true
+                if (busy) { if (busySince == 0L) busySince = now } else busySince = 0L
+                if (busy && now - busySince < 12_000) {
+                    if (n % 5 == 0) Ops.log(this, "(" + secs + " s) app is starting the music, waiting")
+                    main.postDelayed({ attempt(n + 1) }, 1000); return
                 }
-                if (n % 8 == 0) Ops.log(this, "Try " + n + ": " + how + " | player: " + (NowPlayingService.inst?.stateInfo(usedPkg) ?: "no listener"))
-                main.postDelayed({ attempt(n + 1) }, 1200)
+                if (now - lastActAt >= 5000) {
+                    lastActAt = now
+                    val s = step++
+                    val how = try { when {
+                        s == 0 || s == 1 -> if (svc != null && svc.resume(usedPkg)) "resume where it left off" else { Ops.mediaKeyTo(this, usedPkg, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "no player yet, sent Play to the app" }
+                        s == 2 || s == 4 -> { val t = MixService.inst?.tapPlay(usedPkg) ?: ""; if (t.isNotEmpty()) "tapped " + t else if (svc != null && svc.resume(usedPkg)) "nothing to tap, resume" else { Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "nothing to tap, Play key" } }
+                        s == 3 -> if (svc != null && svc.playSaved(usedPkg)) "play last track by name" else { Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "no player yet, Play key" }
+                        s == 5 -> "asked the app to play music (voice-search request): " + Ops.playFromSearch(this, usedPkg)
+                        s % 2 == 0 -> { val t = MixService.inst?.tapPlay(usedPkg) ?: ""; if (t.isEmpty()) "nothing to tap" else "tapped " + t }
+                        else -> if (svc != null && svc.resume(usedPkg)) "resume" else { Ops.mediaKey(this, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); "Play key" }
+                    } } catch (e: Exception) { "failed: " + e.javaClass.simpleName }
+                    Ops.log(this, "Step " + (s + 1) + " (" + secs + " s): " + how + " | player: " + (svc?.stateInfo(usedPkg) ?: "no listener"))
+                }
+                main.postDelayed({ attempt(n + 1) }, 1000)
             }
             main.postDelayed({ attempt(0) }, delay)
         }
@@ -365,8 +359,12 @@ class MainActivity : Activity() {
     private var minH = 0   // smallest window Maps accepts on this tablet (learned the first time it refuses to shrink)
     private fun target(r: android.graphics.Rect): android.graphics.Rect {
         val t = android.graphics.Rect(r.left + 7, Math.max(r.top, 24) + 2, r.right - 10, r.bottom - 8)
-        if (minW > 0 && t.width() < minW) t.right = t.left + minW
-        if (minH > 0 && t.height() < minH) t.bottom = t.top + minH
+        // v0.82: never widen Maps past the pane (that covered the clock/weather column). If Maps needs more height than the
+        // pane has, grow it UPWARD into the empty space above the map (not below Samsung's handle bar), not down over the buttons.
+        if (minH > 0 && t.height() < minH) {
+            t.top = Math.max(44, t.bottom - minH)
+            if (t.height() < minH) t.bottom = t.top + minH
+        }
         return t
     }
     /** Maps sits inside its pane and is nearly as big as it: good enough, do not keep relaunching it for a few pixels. */
@@ -462,7 +460,8 @@ class MainActivity : Activity() {
                                     if (!gaveUp) {
                                         gaveUp = true; adj.set(0, 0, 0, 0)
                                         // Maps would not get smaller than this: remember it, so next time the pane is asked for exactly that size and no more nudging is needed
-                                        if ((b.width() > want.width() || b.height() > want.height()) && b.width() - want.width() <= 40 && b.height() - want.height() <= 40) { minW = Math.max(minW, b.width()).coerceAtMost(1100); minH = Math.max(minH, b.height()).coerceAtMost(700); saveMin() }
+                                        // v0.82: learn only the height (Maps really will not go shorter); a learned width pushed Maps over the right column
+                                        if (b.height() > want.height() && b.height() - want.height() <= 40) { minW = 0; minH = Math.max(minH, b.height()).coerceAtMost(700); saveMin() }
                                         ev("Maps will not get smaller than [" + b.width() + " x " + b.height() + "], using that size from now on (wanted [" + want.width() + " x " + want.height() + "])")
                                     }
                                 } else nudgeMaps(pk, b, want0!!)
@@ -489,13 +488,13 @@ class MainActivity : Activity() {
         }
         if (!count) return true
         relaunchTimes.removeAll { now - it > 60000 }
-        if (relaunchTimes.size >= 4) { pausedUntil = now + 120000; relaunchTimes.clear(); ev("Maps was put back 4 times in a minute (" + why + "): pausing automatic placement for 2 minutes"); return false }
+        if (relaunchTimes.size >= 6) { pausedUntil = now + 120000; relaunchTimes.clear(); ev("Maps was put back 6 times in a minute (" + why + "): pausing automatic placement for 2 minutes"); return false }
         relaunchTimes.add(now); return true
     }
     private var retryQueued = false
     private fun nudgeMaps(pk: String, b: android.graphics.Rect?, want0: android.graphics.Rect) {
         if (Ops.sleeping()) return
-        if (!mayRelaunch("nudge", false)) return
+        if (!mayRelaunch("nudge")) return   // v0.82: nudges count toward the limit again, so Maps can never be relaunched in a loop
         val tg = target(want0)
         if (b != null) {
             val dl = tg.left - b.left; val dt = tg.top - b.top; val dr = tg.right - b.right; val db = tg.bottom - b.bottom
@@ -505,7 +504,7 @@ class MainActivity : Activity() {
             }
         }
         nudges++; lastNudgeFrom = b?.let { android.graphics.Rect(it) }; lastRelaunchAt = SystemClock.elapsedRealtime()
-        relaunchFloat(pk, adjusted(want0), b != null)
+        relaunchFloat(pk, adjusted(want0), false)   // v0.82: move Maps without restarting it (restarting it again and again overloaded the tablet)
     }
     private fun relaunchFloat(pk: String, r: android.graphics.Rect, fresh: Boolean = false) {
         ev("nudging Maps to [" + r.left + "," + r.top + "," + r.right + "," + r.bottom + "], it was at " + (MixService.inst?.floatBounds(pk)?.let { "[" + it.left + "," + it.top + "," + it.right + "," + it.bottom + "]" } ?: "not showing"))
@@ -525,7 +524,7 @@ class MainActivity : Activity() {
     override fun onStop() { super.onStop(); hubStarted = false; paneRect = null; lockHandler.removeCallbacks(lockTick); updateRing(null); val np = floatingNavPkg().ifEmpty { floatPkg }; ev("hub left view" + (if (np.isNotEmpty()) ", tucking Maps" else "")); if (np.isNotEmpty()) { floatPkg = np; tuckedPkg = np; MixService.inst?.minimizeFloating(np) } }
     private fun saveFloat() { try { val r = floatRect ?: return; Ops.prefs(this).edit().putString("float_pkg", floatPkg).putString("float_rect", r.left.toString() + "," + r.top + "," + r.right + "," + r.bottom).apply() } catch (e: Exception) { } }
     private fun saveMin() { try { Ops.prefs(this).edit().putString("maps_min", minW.toString() + "," + minH).apply() } catch (e: Exception) { } }
-    private fun loadMin() { try { val q = (Ops.prefs(this).getString("maps_min", "") ?: "").split(","); if (q.size == 2) { minW = q[0].toInt(); minH = q[1].toInt() } } catch (e: Exception) { } }
+    private fun loadMin() { try { val q = (Ops.prefs(this).getString("maps_min", "") ?: "").split(","); if (q.size == 2) { minW = 0; minH = q[1].toInt().coerceIn(0, 700) } } catch (e: Exception) { } }
     private fun saveAdj() { try { Ops.prefs(this).edit().putString("float_adj3", adj.left.toString() + "," + adj.top + "," + adj.right + "," + adj.bottom).apply() } catch (e: Exception) { } }
     private fun loadAdj() { try { val q = (Ops.prefs(this).getString("float_adj3", "") ?: "").split(","); if (q.size == 4) { val v = q.map { it.toInt() }; if (v.all { Math.abs(it) <= 15 }) adj.set(v[0], v[1], v[2], v[3]) } } catch (e: Exception) { } }
     private fun loadFloat() { loadAdj(); loadMin(); try {
@@ -865,6 +864,26 @@ class MainActivity : Activity() {
         return "now"
     }
     private fun pkgIsYt(c: android.media.session.MediaController) = c.packageName.contains("youtube")
+
+    /** True when "Mazda Hub Start mix" is switched on in Android's Accessibility settings (even if Android has not connected it yet). */
+    private fun helperSwitchedOn(): Boolean = try {
+        val me = android.content.ComponentName(this, MixService::class.java)
+        val on = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+        on.split(':').any { it.equals(me.flattenToString(), true) || it.equals(me.flattenToShortString(), true) }
+    } catch (e: Exception) { false }
+
+    /** Waits up to about 8 s for Android to connect the helper, then runs [then]. Tells the hub screen if it never comes. */
+    private fun waitForHelper(n: Int, then: (MixService) -> Unit) {
+        main.postDelayed({
+            val s = MixService.inst
+            if (s != null) { Ops.log(this, "Helper connected after " + ((n + 1) * 400) + " ms"); try { then(s) } catch (e: Exception) { } }
+            else if (n < 20) waitForHelper(n + 1, then)
+            else {
+                Ops.log(this, "Helper is switched on but Android never connected it")
+                pushJs("window.hub&&hub.toast&&hub.toast('Android has not started the Start mix helper. In Accessibility, turn Mazda Hub Start mix off and on once.')")
+            }
+        }, 400)
+    }
 
     /** Hides the status bar. The Android Back / Home / Recents bar stays visible unless "Full screen" is turned on in Settings. */
     private fun goImmersive() {
@@ -1448,12 +1467,38 @@ class MainActivity : Activity() {
         /** Start a mix: the accessibility helper opens the player menu in the music app and taps "Start mix". */
         @JavascriptInterface fun startMix(artist: String, title: String): String {
             val c = NowPlayingService.controller ?: return "none"
-            val svc = MixService.inst
-            if (svc == null) { openSetup("a11y"); return "needs-access" }
             val pkg = c.packageName
+            val svc = MixService.inst
+            if (svc == null) {
+                // v0.82: only open Accessibility when the helper is really switched off. When it is switched on but Android
+                // has not connected it yet (after an update, or after Android closed the app), wait for it instead.
+                if (!helperSwitchedOn()) { openSetup("a11y"); return "needs-access" }
+                Ops.log(this@MainActivity, "Start mix: helper is switched on but not connected yet, waiting for it")
+                waitForHelper(0) { s -> Ops.launchApp(this@MainActivity, pkg); s.begin(pkg) }
+                return "waiting"
+            }
             Ops.launchApp(this@MainActivity, pkg)
             svc.begin(pkg)
             return "started"
+        }
+        /** v0.82: the button that replaced Dislike. Opens Liked music in YouTube Music and has the helper tap Shuffle. */
+        @JavascriptInterface fun shuffleLiked(): String {
+            val now = NowPlayingService.controller?.packageName ?: ""
+            val pref = Ops.prefs(this@MainActivity).getString("music_pkg", "") ?: ""
+            val pkg = listOf(now, pref).firstOrNull { it.contains("youtube") && it.contains("music") }
+                ?: listOf("app.morphe.android.apps.youtube.music", "com.google.android.apps.youtube.music").firstOrNull { p -> try { packageManager.getPackageInfo(p, 0); true } catch (e: Exception) { false } }
+                ?: return "not-yt"
+            val i = Intent(Intent.ACTION_VIEW, Uri.parse("https://music.youtube.com/playlist?list=LM")).setPackage(pkg)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (packageManager.queryIntentActivities(i, 0).isEmpty()) return "no-link"
+            Ops.log(this@MainActivity, "Shuffle Liked music: opening the playlist in " + pkg)
+            runOnUiThread {
+                try { startActivity(i) } catch (e: Exception) { Ops.log(this@MainActivity, "Shuffle Liked music: could not open (" + e.javaClass.simpleName + ")") }
+                val s = MixService.inst
+                if (s != null) s.shuffleLiked(pkg)
+                else if (helperSwitchedOn()) waitForHelper(0) { h -> h.shuffleLiked(pkg) }
+            }
+            return if (MixService.inst != null || helperSwitchedOn()) "started" else "opened"
         }
         @JavascriptInterface fun mixNow(artist: String, title: String): String = startMix(artist, title)
         @JavascriptInterface fun cancelMix() { }

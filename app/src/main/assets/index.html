@@ -853,9 +853,9 @@
   <section class="glass media" aria-label="Now playing">
     <div class="wavewrap" id="wavewrap"><canvas id="wave" aria-hidden="true"></canvas></div>
     <div class="controls">
-        <button class="cbtn bad" id="btn-dislike" aria-label="Dislike" aria-pressed="false">
-          <svg viewBox="0 0 24 24"><path d="M17 3H7.5a2 2 0 0 0-1.9 1.4L3 12.5V14a2 2 0 0 0 2 2h5.5l-.8 3.8a1.6 1.6 0 0 0 2.9 1.2L17 14zM17 3h3v11h-3"/></svg>
-        <span class="cap">Dislike</span></button>
+        <button class="cbtn" id="btn-shuffle" aria-label="Shuffle Liked music">
+          <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9.5A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.5"/><path d="M14 15h2.5l4 4H22M14 19h2.5l1.5-1.5M20 13.5l2 1.5-2 1.5M20 17.5l2 1.5-2 1.5"/></svg>
+        <span class="cap">Shuffle</span></button>
         <button class="cbtn" id="btn-like" aria-label="Like" aria-pressed="false">
           <svg viewBox="0 0 24 24"><path d="M7 21H4V10h3zM7 10l3.5-7.2A1.7 1.7 0 0 1 14 3.8L13 9h6a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 17.6 20H7"/></svg>
         <span class="cap">Like</span></button>
@@ -1045,13 +1045,13 @@
     }
     if (NATIVE && (name === 'like' || name === 'dislike')) {
       let ok = false; try { ok = window.HubNative.rate(name); } catch (e) {}
-      if (ok) toast(a.label); else { toast('This music app does not allow ' + name + ' from the hub'); setPressed(name === 'like' ? 'btn-like' : 'btn-dislike', false); }
+      if (ok) toast(a.label); else { toast('This music app does not allow ' + name + ' from the hub'); setPressed('btn-like', false); }
       return;
     }
     if (NATIVE && name === 'mix') {
       const art = ($('np-artist').textContent || '').trim(), ttl = ($('np-title').textContent || '').trim();
       let r = ''; try { r = window.HubNative.startMix(art, ttl); } catch (e) { }
-      toast(r === 'started' ? 'Starting a mix in your music app\u2026' : r === 'needs-access' ? 'Turn on \u201cMazda Hub Start mix\u201d in Accessibility, then tap Start mix again' : r === 'none' ? 'Play a song first' : 'Could not start a mix');
+      toast(r === 'started' ? 'Starting a mix in your music app\u2026' : r === 'waiting' ? 'Start mix helper is waking up\u2026' : r === 'needs-access' ? 'Turn on \u201cMazda Hub Start mix\u201d in Accessibility, then tap Start mix again' : r === 'none' ? 'Play a song first' : 'Could not start a mix');
       return;
     }
     if (CONFIG.mode === 'mock') { toast(a.label + ' (mock)'); return; }
@@ -1145,7 +1145,7 @@
     ti = (i + TRACKS.length) % TRACKS.length;
     pos = 0;
     applyNowPlaying(TRACKS[ti]);
-    setPressed('btn-like', false); setPressed('btn-dislike', false);
+    setPressed('btn-like', false);
   }
   setInterval(() => {
     if (NATIVE && !localActive) {
@@ -1174,18 +1174,23 @@
   $('btn-next').addEventListener('click', () => { if (localActive) { playLocal(qi + 1); return; } loadTrack(ti + 1); trigger('next'); });
   $('btn-prev').addEventListener('click', () => { if (localActive) { if (engine.currentTime > 3) engine.currentTime = 0; else playLocal(qi - 1); return; } loadTrack(ti - 1); trigger('prev'); });
   function rateTap(kind) {
-    const id = kind === 'like' ? 'btn-like' : 'btn-dislike', other = kind === 'like' ? 'btn-dislike' : 'btn-like';
+    const id = 'btn-like', other = null;
     if (NATIVE && likeKnown) {
       trigger(kind);                         // the app is the source of truth: wait for it to report the new state
       setTimeout(syncNow, 500); setTimeout(syncNow, 1400);
       return;
     }
     const on = !$(id).classList.contains('on');
-    setPressed(id, on); if (on) setPressed(other, false);
+    setPressed(id, on);
     trigger(kind);
   }
   $('btn-like').addEventListener('click', () => rateTap('like'));
-  $('btn-dislike').addEventListener('click', () => rateTap('dislike'));
+  // v0.82: Shuffle Liked music (replaces Dislike)
+  $('btn-shuffle').addEventListener('click', () => {
+    if (!NATIVE) { toast('Shuffle Liked music works in the Mazda Hub app'); return; }
+    let r = ''; try { r = window.HubNative.shuffleLiked(); } catch (e) { }
+    toast(r === 'started' ? 'Shuffling Liked music\u2026' : r === 'opened' ? 'Opened Liked music. Turn on Mazda Hub Start mix in Accessibility so the hub can tap Shuffle' : r === 'not-yt' ? 'Shuffle Liked music needs YouTube Music' : r === 'no-link' ? 'Your YouTube Music app would not open the Liked music link' : 'Could not open Liked music');
+  });
   { let lp = null, lpDone = false; const mb = $('btn-mix');
     mb.addEventListener('pointerdown', () => { lpDone = false; lp = setTimeout(() => { lpDone = true;
       if (NATIVE && !localActive) { const art = ($('np-artist').textContent || '').trim(), ttl = ($('np-title').textContent || '').trim(); let r = ''; try { r = window.HubNative.mixNow(art, ttl); } catch (e) { } toast(r === 'none' ? 'Play a song first' : r === 'needs-access' ? 'Turn on Mazda Hub Start mix in Accessibility' : 'Starting the mix now'); } }, 650); });
@@ -1391,13 +1396,12 @@
         return;
       }
       const key = (o.title || '') + '|' + (o.artist || '');
-      if (key !== lastKey) { setPressed('btn-like', false); setPressed('btn-dislike', false); lastKey = key; }
+      if (key !== lastKey) { setPressed('btn-like', false); lastKey = key; }
       likeKnown = o.liked === 0 || o.liked === 1 || o.liked === -1;
-      if (likeKnown) { setPressed('btn-like', o.liked === 1); setPressed('btn-dislike', o.liked === -1); }
+      if (likeKnown) { setPressed('btn-like', o.liked === 1); }
       $('btn-like').classList.toggle('dis', likeKnown && o.canLike === false);
-      $('btn-dislike').classList.toggle('dis', likeKnown && o.canDislike === false);
-      { const lc = $('btn-like').querySelector('.cap'), dc = $('btn-dislike').querySelector('.cap');
-        if (lc) lc.textContent = o.liked === 1 ? 'Liked' : 'Like'; if (dc) dc.textContent = o.liked === -1 ? 'Disliked' : 'Dislike'; }
+      { const lc = $('btn-like').querySelector('.cap');
+        if (lc) lc.textContent = o.liked === 1 ? 'Liked' : 'Like'; }
       liveNow = true; liveFeed = true; nowPkg = o.pkg || '';
       applyNowPlaying({ title: o.title || 'Unknown title', artist: o.artist || o.album || '', dur: o.dur || 0, hue: hashHue(key), art: o.art || '' });
       dur = o.dur || 0; anchorPos = o.pos || 0; anchorAt = performance.now(); pos = anchorPos;
@@ -1406,6 +1410,8 @@
       const sv = CONFIG.sources.find(x => x.id === nowPkg); if (sv) { if (sourceId !== nowPkg) { sourceId = nowPkg; try { localStorage.setItem('hub-source', nowPkg); } catch (e) { } try { renderApps(); } catch (e) { } } $('np-src-name').textContent = 'Now playing \u00b7 ' + sv.name; }
     },
     setNav(o) { renderNav(o); },
+    toast(msg) { toast(String(msg)); },
+    shuffleDone(ok, msg) { toast(String(msg)); },
     mixDone(ok, msg) { toast(ok ? 'Mix started' : 'Mix failed: ' + String(msg).slice(0, 90)); },
     mixState(on) { $('btn-mix').classList.toggle('on', !!on); const sp = $('btn-mix').querySelector('span'); if (sp) sp.textContent = on ? 'Mix queued' : 'Start mix'; }
   };
@@ -1480,7 +1486,7 @@
     engine.src = t.url;
     applyNowPlaying(trackInfo(t));
     pos = 0; $('np-cur').textContent = '0:00';
-    setPressed('btn-like', false); setPressed('btn-dislike', false);
+    setPressed('btn-like', false);
     ensureAudio();
     engine.play().catch(() => { toast('Tap play to start'); });
   }
@@ -1912,7 +1918,8 @@
     if (/\b(volume down|quieter|softer|turn it down|turn down)\b/.test(s)) { clickEl('v-down'); clickEl('v-down'); return; }
     if ((m = s.match(/^(mute|unmute)\b/))) { try { if ((m[1] === 'mute') !== H().isMuted()) H().toggleMute(); } catch (e) { } return; }
     if (/\b(start|play)\b.*\bmix\b|^mix\b/.test(s)) { voiceSay('Starting a mix'); clickEl('btn-mix'); return; }
-    if (/\b(dislike|thumbs down|thumb down)\b/.test(s)) { voiceSay('Disliked'); clickEl('btn-dislike'); return; }
+    if (/\bshuffle\b|\bliked (music|songs)\b|\bmy likes\b/.test(s)) { voiceSay('Shuffling Liked music'); clickEl('btn-shuffle'); return; }
+    if (/\b(dislike|thumbs down|thumb down)\b/.test(s)) { voiceSay('Dislike was replaced by Shuffle'); return; }
     if (/\b(like|thumbs up|thumb up|love this)\b/.test(s)) { voiceSay('Liked'); clickEl('btn-like'); return; }
     if (/\b(next|skip)\b/.test(s)) { voiceSay('Next'); clickEl('btn-next'); return; }
     if (/\b(previous|go back|last song|back)\b/.test(s)) { voiceSay('Previous'); clickEl('btn-prev'); return; }
