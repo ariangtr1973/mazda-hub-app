@@ -574,6 +574,7 @@ class MainActivity : Activity() {
     } catch (e: Exception) { }
     try {
         val p = Ops.prefs(this); val pk = p.getString("float_pkg", "") ?: ""; val q = (p.getString("float_rect", "") ?: "").split(",")
+        if (!MAPS_WINDOW) { try { p.edit().remove("float_pkg").remove("float_rect").apply() } catch (e: Exception) { }; return }
         if (pk.isNotEmpty() && q.size == 4) { floatPkg = pk; floatRect = android.graphics.Rect(q[0].toInt(), q[1].toInt(), q[2].toInt(), q[3].toInt()) }
     } catch (e: Exception) { } }
 
@@ -637,6 +638,7 @@ class MainActivity : Activity() {
 
     /** The hub is on screen and in front (Home, or back from Recents) but Maps is not on its pane: bring it back. */
     private fun recoverMaps() {
+        if (!MAPS_WINDOW) return
         val now = SystemClock.elapsedRealtime()
         if (!hubStarted || sheetOpen || handingOver() || floatPkg.isEmpty() || tuckedPkg.isNotEmpty() || Ops.sleeping()) return
         if ( now - lastRestoreAt < 4000) return
@@ -647,6 +649,7 @@ class MainActivity : Activity() {
 
     /** Puts the Maps window back on the map pane (the pane's current position, measured live). */
     private fun restoreMaps() {
+        if (!MAPS_WINDOW) { tuckedPkg = ""; return }
         val pk = tuckedPkg; val r = paneRect
         if (pk.isEmpty() || Ops.sleeping()) return
         if (r == null) {
@@ -694,6 +697,7 @@ class MainActivity : Activity() {
 
     /** The navigation app that is floating over the hub right now (the one the hub opened, or Maps/Waze opened by any other way). */
     private fun floatingNavPkg(): String {
+        if (!MAPS_WINDOW) return ""
         for (p in listOf(floatPkg, "com.google.android.apps.maps", "com.waze")) {
             if (p.isNotEmpty() && (MixService.inst?.floatBounds(p)?.let { it.width() > 300 && it.height() > 150 } == true)) return p
         }
@@ -1379,6 +1383,7 @@ class MainActivity : Activity() {
         @JavascriptInterface fun launchApp(pkg: String): Boolean { lastOutLaunch = SystemClock.elapsedRealtime(); return Ops.launchApp(this@MainActivity, pkg) }
         /** Opens an app asking Android to size its window to this box (screen pixels). Honoured only when freeform windows are enabled. */
         @JavascriptInterface fun launchAppIn(pkg: String, l: Int, t: Int, r: Int, b: Int): Boolean {
+            if (!MAPS_WINDOW) { lastOutLaunch = SystemClock.elapsedRealtime(); return Ops.launchApp(this@MainActivity, pkg) }   // v0.90: full screen, never a window on the pane
             val i = packageManager.getLaunchIntentForPackage(pkg) ?: return false
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             return try {
@@ -1452,6 +1457,7 @@ class MainActivity : Activity() {
                 val q = Uri.encode(query)
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?q=$q&navigate=yes") else Uri.parse("google.navigation:q=$q&mode=d")
                 val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (!MAPS_WINDOW) { lastOutLaunch = SystemClock.elapsedRealtime(); startActivity(i); return true }   // v0.90: full screen
                 val o = android.app.ActivityOptions.makeBasic(); val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0 }; o.setLaunchBounds(adjusted(want))
                 startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { false }
@@ -1461,6 +1467,7 @@ class MainActivity : Activity() {
             return try {
                 val uri = if (pkg == "com.waze") Uri.parse("waze://?ll=$lat,$lon&navigate=yes") else Uri.parse("google.navigation:q=$lat,$lon&mode=d")
                 val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (!MAPS_WINDOW) { lastOutLaunch = SystemClock.elapsedRealtime(); startActivity(i); return true }   // v0.90: full screen
                 val o = android.app.ActivityOptions.makeBasic(); val want = paneRect ?: android.graphics.Rect(l, t, r, b); if (floatRect != want) { calib = 0 }; o.setLaunchBounds(adjusted(want))
                 startActivity(i, o.toBundle()); floatPkg = pkg; floatRect = want; saveFloat(); true
             } catch (e: Exception) { false }
@@ -1678,6 +1685,8 @@ class MainActivity : Activity() {
         private const val REQ_RESTORE = 1008
         @Volatile var live: MainActivity? = null
         @Volatile var runIdShared = 0
+        /** v0.90: maps now run on the car's own screen (Android Auto). The hub never puts a Google Maps / Waze window on the tablet's map pane. */
+        const val MAPS_WINDOW = false
         @Volatile var autoStartedAt = -1_000_000L
     }
 }

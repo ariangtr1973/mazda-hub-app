@@ -1773,7 +1773,7 @@
       if (!c.notif) miss.push('allow now playing access'); if (!c.btPerm) miss.push('allow Bluetooth access'); if (!c.music) miss.push('pick a music app');
       const r = $('ready'); r.className = 'ready ' + (miss.length ? 'warn' : 'ok');
       r.textContent = miss.length ? 'Not ready for the car yet. Still to do: ' + miss.join(', ') + '.' : 'Ready. When ' + (c.carName || 'your car') + ' connects, the hub wakes, waits for the hotspot, starts your music and comes back.'; }
-    try { const hm = localStorage.getItem('hub-nav-mode') === 'hub'; $('s-navmode').textContent = hm ? 'Hub map' : 'Maps app'; } catch (e) { }
+    try { const hm = localStorage.getItem('hub-nav-mode') !== 'maps'; $('s-navmode').textContent = hm ? 'Hub map' : 'Maps app'; } catch (e) { }
     try { const hb = H().getHideBars(); $('s-bars').textContent = hb ? 'On' : 'Off'; $('s-bars').className = 'st ' + (hb ? 'ok' : ''); $('s-clean').textContent = H().getCleanStatus(); } catch (e) { }
     micOk = !!c.mic; stat('s-notif', c.notif); stat('s-a11y', c.a11y); stat('s-mic', c.mic); stat('s-loc', c.loc);
     stat('s-overlay', c.overlay); stat('s-write', c.write); stat('s-battery', c.battery); stat('s-bt', c.btPerm);
@@ -1807,7 +1807,7 @@
   $('p-delay').addEventListener('click', () => { const c = JSON.parse(H().getSetup()); H().setDelay(c.delay >= 20 ? 3 : c.delay + 3); renderSetup(); });
   $('p-awake').addEventListener('click', () => { $('awake-btn').click(); setTimeout(renderSetup, 150); });
   $('p-lite').addEventListener('click', () => { const on = !isLite(); liteOn(on); try { localStorage.setItem('hub-lite', on ? '1' : '0'); } catch (e) {} renderSetup(); });
-  $('p-navmode').addEventListener('click', () => { try { localStorage.setItem('hub-nav-mode', localStorage.getItem('hub-nav-mode') === 'hub' ? 'maps' : 'hub'); } catch (e) { } renderSetup(); });
+  $('p-navmode').addEventListener('click', () => { try { localStorage.setItem('hub-nav-mode', localStorage.getItem('hub-nav-mode') === 'maps' ? 'hub' : 'maps'); } catch (e) { } renderSetup(); });
   $('p-bars').addEventListener('click', () => { try { H().setHideBars(!H().getHideBars()); } catch (e) { } setTimeout(renderSetup, 300); });
   $('p-clean').addEventListener('click', () => { try { H().cleanNow(); toast('Cleaning up\u2026'); } catch (e) { } setTimeout(renderSetup, 1500); });
   $('p-test').addEventListener('click', () => { H().testAuto(); $('setup').classList.remove('open'); });
@@ -2271,7 +2271,7 @@
       const r0 = trk.update(TM.pos()[0], TM.pos()[1], 0, 0); r0.say = null; ui(); banner(r0);
       say('Starting route to ' + (d.name || 'your destination') + '. ' + Nav.fmtDur(rt.dur) + ', ' + Nav.sayDist(rt.total) + '.');
     }
-    function handoffOn() { try { return localStorage.getItem('hub-nav-mode') !== 'hub'; } catch (e) { return true; } }
+    function handoffOn() { try { return localStorage.getItem('hub-nav-mode') === 'maps'; } catch (e) { return false; } }   // v0.90: maps run on the car screen; the tablet uses its own map unless set to hand off
     function handoff(d) {
       let apps = []; try { apps = JSON.parse(H().getNavApps()); } catch (e) { }
       const a = apps[0]; if (!a) return false;
